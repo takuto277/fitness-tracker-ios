@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>このアプリは水分摂取量などのデータをHealthKitに記録します。</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>このアプリは歩数や心拍数などの健康データを表示するためにHealthKitのデータを読み取ります。</string>
+</dict>
+</plist>
