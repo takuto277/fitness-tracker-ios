@@ -13,6 +13,7 @@ struct ContentView: View {
     @StateObject private var goalManager = GoalManager()
     @StateObject private var workoutManager = WorkoutManager()
     @StateObject private var nutritionManager = NutritionManager()
+    @StateObject private var progressTracker = ProgressTracker()
     @State private var selectedTab = 0
     
     var body: some View {
@@ -25,7 +26,8 @@ struct ContentView: View {
                 healthKitManager: healthKitManager,
                 goalManager: goalManager,
                 workoutManager: workoutManager,
-                nutritionManager: nutritionManager
+                nutritionManager: nutritionManager,
+                progressTracker: progressTracker
             )
         }
     }
@@ -36,6 +38,7 @@ struct MainTabView: View {
     @ObservedObject var goalManager: GoalManager
     @ObservedObject var workoutManager: WorkoutManager
     @ObservedObject var nutritionManager: NutritionManager
+    @ObservedObject var progressTracker: ProgressTracker
     
     var body: some View {
         TabView {
@@ -49,6 +52,13 @@ struct MainTabView: View {
                 Image(systemName: "chart.bar.fill")
                 Text("ダッシュボード")
             }
+            
+            // 進捗分析
+            ProgressAnalysisView(progressTracker: progressTracker)
+                .tabItem {
+                    Image(systemName: "chart.line.uptrend.xyaxis")
+                    Text("進捗分析")
+                }
             
             // 目標管理
             GoalsView(goalManager: goalManager)
@@ -83,6 +93,7 @@ struct MainTabView: View {
             healthKitManager.fetchTodayData()
             workoutManager.fetchWorkouts()
             nutritionManager.fetchTodayNutrition()
+            progressTracker.fetchProgressData()
             
             // 目標の進捗を更新
             goalManager.updateGoalProgress(type: .steps, currentValue: Double(healthKitManager.stepCount))
