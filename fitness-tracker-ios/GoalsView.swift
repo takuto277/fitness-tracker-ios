@@ -94,7 +94,7 @@ struct GoalCard: View {
                             .font(.headline)
                             .foregroundColor(.primary)
                         
-                        Text("期限: \(formatJapaneseDate(goal.deadline))")
+                        Text("期限: \(DateUtil.shared.formatJapaneseDate(goal.deadline))")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -252,7 +252,7 @@ struct GoalDetailView: View {
                             .fontWeight(.bold)
                             .multilineTextAlignment(.center)
                         
-                        Text("期限: \(formatJapaneseDate(goal.deadline))")
+                        Text("期限: \(DateUtil.shared.formatJapaneseDate(goal.deadline))")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }

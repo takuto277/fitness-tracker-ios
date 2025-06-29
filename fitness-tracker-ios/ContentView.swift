@@ -112,7 +112,7 @@ struct DashboardView: View {
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                         
-                        Text(formatJapaneseDate(Date()))
+                        Text(DateUtil.shared.formatJapaneseDate(Date()))
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }

@@ -1,26 +1,35 @@
 import Foundation
 
-// 日本語日付フォーマット関数
-func formatJapaneseDate(_ date: Date) -> String {
-    let formatter = DateFormatter()
-    formatter.locale = Locale(identifier: "ja_JP")
-    formatter.dateStyle = .long
-    return formatter.string(from: date)
-}
+class DateUtil {
+    static let shared = DateUtil()
+    private let longFormatter: DateFormatter
+    private let shortFormatter: DateFormatter
+    private let dateTimeFormatter: DateFormatter
 
-// 短縮版の日本語日付フォーマット
-func formatJapaneseDateShort(_ date: Date) -> String {
-    let formatter = DateFormatter()
-    formatter.locale = Locale(identifier: "ja_JP")
-    formatter.dateStyle = .medium
-    return formatter.string(from: date)
-}
+    private init() {
+        longFormatter = DateFormatter()
+        longFormatter.locale = Locale(identifier: "ja_JP")
+        longFormatter.dateStyle = .long
 
-// 時間付きの日本語日付フォーマット
-func formatJapaneseDateTime(_ date: Date) -> String {
-    let formatter = DateFormatter()
-    formatter.locale = Locale(identifier: "ja_JP")
-    formatter.dateStyle = .medium
-    formatter.timeStyle = .short
-    return formatter.string(from: date)
+        shortFormatter = DateFormatter()
+        shortFormatter.locale = Locale(identifier: "ja_JP")
+        shortFormatter.dateStyle = .short
+
+        dateTimeFormatter = DateFormatter()
+        dateTimeFormatter.locale = Locale(identifier: "ja_JP")
+        dateTimeFormatter.dateStyle = .medium
+        dateTimeFormatter.timeStyle = .short
+    }
+
+    func formatJapaneseDate(_ date: Date) -> String {
+        return longFormatter.string(from: date)
+    }
+
+    func formatJapaneseDateShort(_ date: Date) -> String {
+        return shortFormatter.string(from: date)
+    }
+
+    func formatJapaneseDateTime(_ date: Date) -> String {
+        return dateTimeFormatter.string(from: date)
+    }
 } 

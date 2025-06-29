@@ -131,6 +131,66 @@ struct WorkoutView: View {
                             .padding(.horizontal)
                         }
                     }
+                    
+                    // 筋トレ専用セクション
+                    let strengthWorkouts = workoutManager.workouts.filter { workout in
+                        workout.type == .functionalStrengthTraining || 
+                        workout.type == .traditionalStrengthTraining ||
+                        workout.type == .coreTraining
+                    }
+                    
+                    if !strengthWorkouts.isEmpty {
+                        VStack(spacing: 15) {
+                            Text("筋トレ記録")
+                                .font(.headline)
+                                .padding(.horizontal)
+                            
+                            // 筋トレ統計
+                            HStack(spacing: 20) {
+                                VStack {
+                                    Text("\(strengthWorkouts.count)")
+                                        .font(.title2)
+                                        .fontWeight(.bold)
+                                        .foregroundColor(.purple)
+                                    Text("回")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                
+                                VStack {
+                                    Text("\(Int(strengthWorkouts.reduce(0) { $0 + $1.duration } / 60))")
+                                        .font(.title2)
+                                        .fontWeight(.bold)
+                                        .foregroundColor(.purple)
+                                    Text("分")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                
+                                VStack {
+                                    Text("\(Int(strengthWorkouts.reduce(0) { $0 + $1.calories }))")
+                                        .font(.title2)
+                                        .fontWeight(.bold)
+                                        .foregroundColor(.purple)
+                                    Text("kcal")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            .padding()
+                            .background(Color.purple.opacity(0.1))
+                            .cornerRadius(12)
+                            .padding(.horizontal)
+                            
+                            // 最近の筋トレ
+                            LazyVStack(spacing: 12) {
+                                ForEach(strengthWorkouts.prefix(3), id: \.id) { workout in
+                                    StrengthWorkoutCard(workout: workout)
+                                }
+                            }
+                            .padding(.horizontal)
+                        }
+                    }
                 }
             }
             .navigationTitle("ワークアウト")
@@ -271,7 +331,7 @@ struct WorkoutHistoryCard: View {
             
             Spacer()
             
-            Text(formatJapaneseDate(workout.date))
+            Text(DateUtil.shared.formatJapaneseDateShort(workout.date))
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
@@ -511,6 +571,55 @@ struct DetailRow: View {
             Text(value)
                 .fontWeight(.semibold)
         }
+    }
+}
+
+struct StrengthWorkoutCard: View {
+    let workout: Workout
+    
+    var body: some View {
+        HStack {
+            Image(systemName: "dumbbell.fill")
+                .font(.title2)
+                .foregroundColor(.purple)
+                .frame(width: 40)
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(workout.name)
+                    .font(.headline)
+                    .foregroundColor(.primary)
+                
+                HStack {
+                    Text("\(Int(workout.duration/60))分")
+                        .font(.subheadline)
+                        .foregroundColor(.purple)
+                        .fontWeight(.semibold)
+                    
+                    Text("•")
+                        .foregroundColor(.secondary)
+                    
+                    Text("\(Int(workout.calories))kcal")
+                        .font(.subheadline)
+                        .foregroundColor(.orange)
+                        .fontWeight(.semibold)
+                }
+            }
+            
+            Spacer()
+            
+            VStack(alignment: .trailing, spacing: 4) {
+                Text(DateUtil.shared.formatJapaneseDateShort(workout.date))
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                
+                Text(DateUtil.shared.formatJapaneseDate(workout.date))
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding()
+        .background(Color.purple.opacity(0.1))
+        .cornerRadius(12)
     }
 }
 

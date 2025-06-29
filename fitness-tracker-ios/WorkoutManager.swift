@@ -118,6 +118,7 @@ class WorkoutManager: ObservableObject {
                     )
                 }
                 self.calculateWorkoutStats()
+                self.printWorkoutSummary()
             }
         }
         
@@ -139,6 +140,36 @@ class WorkoutManager: ObservableObject {
         monthlyWorkoutMinutes = workouts
             .filter { $0.date >= monthStart }
             .reduce(0) { $0 + $1.duration / 60 }
+    }
+    
+    private func printWorkoutSummary() {
+        let strengthWorkouts = workouts.filter { workout in
+            workout.type == .functionalStrengthTraining || 
+            workout.type == .traditionalStrengthTraining ||
+            workout.type == .coreTraining
+        }
+        
+        print("=== ワークアウトサマリー ===")
+        print("総ワークアウト数: \(workouts.count)")
+        print("筋トレ回数: \(strengthWorkouts.count)")
+        
+        if !strengthWorkouts.isEmpty {
+            let totalStrengthTime = strengthWorkouts.reduce(0) { $0 + $1.duration }
+            let avgStrengthTime = totalStrengthTime / Double(strengthWorkouts.count)
+            print("筋トレ総時間: \(Int(totalStrengthTime/60))分")
+            print("平均筋トレ時間: \(Int(avgStrengthTime/60))分")
+            
+            // 最近の筋トレ
+            let recentStrength = strengthWorkouts.prefix(3)
+            print("最近の筋トレ:")
+            for workout in recentStrength {
+                print("- \(workout.name): \(Int(workout.duration/60))分 (\(DateUtil.shared.formatJapaneseDate(workout.date)))")
+            }
+        }
+        
+        print("週間運動時間: \(Int(weeklyWorkoutMinutes))分")
+        print("月間運動時間: \(Int(monthlyWorkoutMinutes))分")
+        print("========================")
     }
     
     func startWorkout(type: HKWorkoutActivityType) {
