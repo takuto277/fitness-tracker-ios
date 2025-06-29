@@ -10,329 +10,418 @@ import HealthKit
 
 struct ContentView: View {
     @StateObject private var healthKitManager = HealthKitManager()
-    @StateObject private var goalManager = GoalManager()
-    @StateObject private var workoutManager = WorkoutManager()
+    @StateObject private var bodyCompositionManager = BodyCompositionManager()
     @StateObject private var nutritionManager = NutritionManager()
-    @StateObject private var progressTracker = ProgressTracker()
-    @State private var selectedTab = 0
-    
-    var body: some View {
-        if !healthKitManager.isHealthKitAvailable {
-            HealthKitUnavailableView()
-        } else if !healthKitManager.isAuthorized {
-            AuthorizationView(healthKitManager: healthKitManager)
-        } else {
-            MainTabView(
-                healthKitManager: healthKitManager,
-                goalManager: goalManager,
-                workoutManager: workoutManager,
-                nutritionManager: nutritionManager,
-                progressTracker: progressTracker
-            )
-        }
-    }
-}
-
-struct MainTabView: View {
-    @ObservedObject var healthKitManager: HealthKitManager
-    @ObservedObject var goalManager: GoalManager
-    @ObservedObject var workoutManager: WorkoutManager
-    @ObservedObject var nutritionManager: NutritionManager
-    @ObservedObject var progressTracker: ProgressTracker
+    @StateObject private var progressManager = ProgressManager()
     
     var body: some View {
         TabView {
-            // ダッシュボード
-            DashboardView(
-                healthKitManager: healthKitManager,
-                goalManager: goalManager,
-                workoutManager: workoutManager
-            )
-            .tabItem {
-                Image(systemName: "chart.bar.fill")
-                Text("ダッシュボード")
-            }
+            // 統合ダッシュボード
+            DashboardView()
+                .environmentObject(healthKitManager)
+                .environmentObject(bodyCompositionManager)
+                .environmentObject(progressManager)
+                .tabItem {
+                    Image(systemName: "house.fill")
+                    Text("ダッシュボード")
+                }
+            
+            // リアルタイム運動
+            RealTimeWorkoutView()
+                .environmentObject(healthKitManager)
+                .tabItem {
+                    Image(systemName: "figure.run")
+                    Text("リアルタイム運動")
+                }
+            
+            // 体組成管理
+            BodyCompositionView()
+                .environmentObject(bodyCompositionManager)
+                .tabItem {
+                    Image(systemName: "scalemass.fill")
+                    Text("体組成")
+                }
+            
+            // 栄養分析
+            NutritionAnalysisView()
+                .environmentObject(nutritionManager)
+                .tabItem {
+                    Image(systemName: "fork.knife")
+                    Text("栄養分析")
+                }
             
             // 進捗分析
-            ProgressAnalysisView(progressTracker: progressTracker)
+            ProgressAnalysisView()
+                .environmentObject(progressManager)
+                .environmentObject(healthKitManager)
+                .environmentObject(bodyCompositionManager)
                 .tabItem {
                     Image(systemName: "chart.line.uptrend.xyaxis")
                     Text("進捗分析")
                 }
-            
-            // 目標管理
-            GoalsView(goalManager: goalManager)
-                .tabItem {
-                    Image(systemName: "target")
-                    Text("目標")
-                }
-            
-            // ワークアウト
-            WorkoutView(workoutManager: workoutManager)
-                .tabItem {
-                    Image(systemName: "dumbbell.fill")
-                    Text("ワークアウト")
-                }
-            
-            // 栄養管理
-            NutritionView(nutritionManager: nutritionManager)
-                .tabItem {
-                    Image(systemName: "fork.knife")
-                    Text("栄養")
-                }
-            
-            // 設定
-            SettingsView()
-                .tabItem {
-                    Image(systemName: "gear")
-                    Text("設定")
-                }
         }
-        .onAppear {
-            // データを更新
-            healthKitManager.fetchTodayData()
-            workoutManager.fetchWorkouts()
-            nutritionManager.fetchTodayNutrition()
-            progressTracker.fetchProgressData()
-            
-            // 目標の進捗を更新
-            goalManager.updateGoalProgress(type: .steps, currentValue: Double(healthKitManager.stepCount))
-            goalManager.updateGoalProgress(type: .calories, currentValue: healthKitManager.activeEnergy)
-            goalManager.updateGoalProgress(type: .exercise, currentValue: workoutManager.weeklyWorkoutMinutes)
-            goalManager.updateGoalProgress(type: .water, currentValue: nutritionManager.todayNutrition?.water ?? 0)
-        }
+        .accentColor(.blue)
     }
 }
 
-struct DashboardView: View {
-    @ObservedObject var healthKitManager: HealthKitManager
-    @ObservedObject var goalManager: GoalManager
-    @ObservedObject var workoutManager: WorkoutManager
+// リアルタイム運動画面
+struct RealTimeWorkoutView: View {
+    @EnvironmentObject var healthKitManager: HealthKitManager
+    @State private var selectedWorkoutType: HKWorkoutActivityType = .traditionalStrengthTraining
+    @State private var isWorkoutActive = false
+    @State private var workoutStartTime: Date?
+    @State private var currentHeartRate: Double = 0
+    @State private var currentCalories: Double = 0
+    @State private var workoutDuration: TimeInterval = 0
+    
+    // 筋トレ専用データ
+    @State private var currentSet: Int = 0
+    @State private var currentReps: Int = 0
+    @State private var currentWeight: Double = 0
+    @State private var restTime: TimeInterval = 0
+    
+    let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     
     var body: some View {
         NavigationView {
-            ScrollView(content: {
+            ScrollView {
                 VStack(spacing: 20) {
-                    // ヘッダー
-                    VStack {
-                        Text("HealthKit Fit Journey")
-                            .font(.largeTitle)
-                            .fontWeight(.bold)
-                        
-                        Text("2ヶ月で健康的なライフスタイルを確立")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        
-                        Text(DateUtil.shared.formatJapaneseDate(Date()))
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                    // ワークアウトタイプ選択
+                    if !isWorkoutActive {
+                        workoutTypeSelector
                     }
-                    .padding()
                     
-                    // 全体進捗
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("全体進捗")
-                            .font(.headline)
-                            .padding(.horizontal)
+                    // リアルタイムデータ表示
+                    if isWorkoutActive {
+                        realTimeDataView
                         
-                        ProgressView(value: goalManager.getOverallProgress())
-                            .progressViewStyle(LinearProgressViewStyle(tint: .blue))
-                            .padding(.horizontal)
-                        
-                        Text("\(Int(goalManager.getOverallProgress() * 100))% 完了")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal)
-                    }
-                    .padding(.vertical)
-                    .background(Color.blue.opacity(0.1))
-                    .cornerRadius(10)
-                    .padding(.horizontal)
-                    
-                    // 今日のメトリクス
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 15) {
-                        MetricCard(
-                            title: "歩数",
-                            value: "\(healthKitManager.stepCount)",
-                            unit: "歩",
-                            icon: "figure.walk",
-                            color: .blue,
-                            progress: goalManager.goals.first { $0.type == .steps }?.progress ?? 0
-                        )
-                        
-                        MetricCard(
-                            title: "心拍数",
-                            value: String(format: "%.0f", healthKitManager.heartRate),
-                            unit: "BPM",
-                            icon: "heart.fill",
-                            color: .red,
-                            progress: 0
-                        )
-                        
-                        MetricCard(
-                            title: "消費カロリー",
-                            value: String(format: "%.0f", healthKitManager.activeEnergy),
-                            unit: "kcal",
-                            icon: "flame.fill",
-                            color: .orange,
-                            progress: goalManager.goals.first { $0.type == .calories }?.progress ?? 0
-                        )
-                        
-                        MetricCard(
-                            title: "運動時間",
-                            value: String(format: "%.0f", workoutManager.weeklyWorkoutMinutes),
-                            unit: "分",
-                            icon: "dumbbell.fill",
-                            color: .green,
-                            progress: goalManager.goals.first { $0.type == .exercise }?.progress ?? 0
-                        )
-                    }
-                    .padding(.horizontal)
-                    
-                    // 最近の目標達成
-                    if !goalManager.getCompletedGoals().isEmpty {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("最近の達成")
-                                .font(.headline)
-                                .padding(.horizontal)
-                            
-                            ForEach(goalManager.getCompletedGoals().prefix(3), id: \.id) { goal in
-                                HStack {
-                                    Image(systemName: goal.type.icon)
-                                        .foregroundColor(goal.type.color)
-                                    Text(goal.title)
-                                    Spacer()
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundColor(.green)
-                                }
-                                .padding(.horizontal)
-                            }
+                        // 筋トレ専用セクション
+                        if selectedWorkoutType == .traditionalStrengthTraining {
+                            strengthTrainingSection
                         }
-                        .padding(.vertical)
-                        .background(Color.green.opacity(0.1))
-                        .cornerRadius(10)
-                        .padding(.horizontal)
                     }
                     
-                    // 更新ボタン
-                    Button(action: {
-                        healthKitManager.fetchTodayData()
-                    }) {
-                        HStack {
-                            Image(systemName: "arrow.clockwise")
-                            Text("データを更新")
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.gray.opacity(0.2))
-                        .foregroundColor(.primary)
-                        .cornerRadius(10)
-                    }
-                    .padding(.horizontal)
+                    // コントロールボタン
+                    controlButtons
                 }
-            })
-            .navigationBarHidden(true)
+                .padding()
+            }
+            .navigationTitle("リアルタイム運動")
+            .onReceive(timer) { _ in
+                if isWorkoutActive {
+                    updateWorkoutData()
+                }
+            }
         }
+    }
+    
+    private var workoutTypeSelector: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("ワークアウトタイプ")
+                .font(.headline)
+            
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 10) {
+                ForEach(availableWorkoutTypes, id: \.self) { type in
+                    Button(action: {
+                        selectedWorkoutType = type
+                    }) {
+                        VStack {
+                            Image(systemName: type.icon)
+                                .font(.title2)
+                                .foregroundColor(type.color)
+                            Text(type.displayName)
+                                .font(.caption)
+                                .foregroundColor(.primary)
+                        }
+                        .frame(height: 80)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(selectedWorkoutType == type ? type.color.opacity(0.2) : Color.gray.opacity(0.1))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .stroke(selectedWorkoutType == type ? type.color : Color.clear, lineWidth: 2)
+                                )
+                        )
+                    }
+                }
+            }
+        }
+    }
+    
+    private var realTimeDataView: some View {
+        VStack(spacing: 15) {
+            // 時間表示
+            Text(timeString(from: workoutDuration))
+                .font(.system(size: 48, weight: .bold, design: .monospaced))
+                .foregroundColor(.blue)
+            
+            // リアルタイムデータ
+            HStack(spacing: 20) {
+                DataCard(
+                    title: "心拍数",
+                    value: "\(Int(currentHeartRate))",
+                    unit: "BPM",
+                    icon: "heart.fill",
+                    color: .red
+                )
+                
+                DataCard(
+                    title: "カロリー",
+                    value: "\(Int(currentCalories))",
+                    unit: "kcal",
+                    icon: "flame.fill",
+                    color: .orange
+                )
+            }
+        }
+        .padding()
+        .background(Color.gray.opacity(0.1))
+        .cornerRadius(15)
+    }
+    
+    private var strengthTrainingSection: some View {
+        VStack(spacing: 15) {
+            Text("筋トレセット")
+                .font(.headline)
+            
+            HStack(spacing: 20) {
+                VStack {
+                    Text("セット")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text("\(currentSet)")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                }
+                
+                VStack {
+                    Text("レップ数")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text("\(currentReps)")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                }
+                
+                VStack {
+                    Text("重量")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text("\(Int(currentWeight))kg")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                }
+            }
+            
+            // セット記録ボタン
+            Button("セット記録") {
+                recordSet()
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(currentReps == 0 || currentWeight == 0)
+            
+            // レストタイマー
+            if restTime > 0 {
+                Text("レスト: \(timeString(from: restTime))")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding()
+        .background(Color.orange.opacity(0.1))
+        .cornerRadius(15)
+    }
+    
+    private var controlButtons: some View {
+        HStack(spacing: 20) {
+            if !isWorkoutActive {
+                Button("ワークアウト開始") {
+                    startWorkout()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!healthKitManager.isAuthorized)
+            } else {
+                Button("ワークアウト停止") {
+                    stopWorkout()
+                }
+                .buttonStyle(.borderedProminent)
+                .foregroundColor(.red)
+            }
+        }
+    }
+    
+    private func startWorkout() {
+        isWorkoutActive = true
+        workoutStartTime = Date()
+        currentSet = 1
+        currentReps = 0
+        currentWeight = 0
+        restTime = 0
+        
+        // HealthKitにワークアウト開始を記録
+        healthKitManager.startWorkout(type: selectedWorkoutType)
+    }
+    
+    private func stopWorkout() {
+        isWorkoutActive = false
+        workoutStartTime = nil
+        
+        // HealthKitにワークアウト終了を記録
+        healthKitManager.endWorkout()
+    }
+    
+    private func recordSet() {
+        // セット記録
+        currentSet += 1
+        currentReps = 0
+        currentWeight = 0
+        startRestTimer()
+    }
+    
+    private func startRestTimer() {
+        restTime = 0
+        // レストタイマーは既にメインタイマーで処理されている
+    }
+    
+    private func updateWorkoutData() {
+        guard let startTime = workoutStartTime else { return }
+        
+        // ワークアウト時間の更新
+        workoutDuration = Date().timeIntervalSince(startTime)
+        
+        // 心拍数とカロリーの取得（実際のアプリではHealthKitから取得）
+        // ここではダミーデータを使用
+        currentHeartRate = Double.random(in: 120...180)
+        currentCalories = workoutDuration / 60 * 10 // 仮の計算
+    }
+    
+    private func timeString(from timeInterval: TimeInterval) -> String {
+        let hours = Int(timeInterval) / 3600
+        let minutes = Int(timeInterval) / 60 % 60
+        let seconds = Int(timeInterval) % 60
+        
+        if hours > 0 {
+            return String(format: "%02d:%02d:%02d", hours, minutes, seconds)
+        } else {
+            return String(format: "%02d:%02d", minutes, seconds)
+        }
+    }
+    
+    private var availableWorkoutTypes: [HKWorkoutActivityType] {
+        [
+            .traditionalStrengthTraining,
+            .functionalStrengthTraining,
+            .coreTraining,
+            .running,
+            .walking,
+            .cycling,
+            .swimming,
+            .yoga,
+            .pilates,
+            .mixedCardio
+        ]
     }
 }
 
-struct MetricCard: View {
+// データカード
+struct DataCard: View {
     let title: String
     let value: String
     let unit: String
     let icon: String
     let color: Color
-    let progress: Double
     
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 5) {
             Image(systemName: icon)
-                .font(.system(size: 30))
+                .font(.title2)
                 .foregroundColor(color)
             
-            VStack(spacing: 2) {
-                Text(value)
-                    .font(.title2)
-                    .fontWeight(.bold)
-                
-                Text(unit)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
+            Text(value)
+                .font(.title2)
+                .fontWeight(.bold)
+            
+            Text(unit)
+                .font(.caption)
+                .foregroundColor(.secondary)
             
             Text(title)
                 .font(.caption)
                 .foregroundColor(.secondary)
-            
-            if progress > 0 {
-                ProgressView(value: progress)
-                    .progressViewStyle(LinearProgressViewStyle(tint: color))
-                    .frame(height: 4)
-            }
         }
         .frame(maxWidth: .infinity)
         .padding()
-        .background(Color.gray.opacity(0.1))
+        .background(Color.white)
         .cornerRadius(10)
+        .shadow(radius: 2)
     }
 }
 
-struct HealthKitUnavailableView: View {
-    var body: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "xmark.circle")
-                .font(.system(size: 80))
-                .foregroundColor(.red)
-            
-            Text("HealthKitが利用できません")
-                .font(.title2)
-                .fontWeight(.bold)
-            
-            Text("このアプリはHealthKitをサポートするデバイスで実行する必要があります。")
-                .font(.body)
-                .multilineTextAlignment(.center)
-                .foregroundColor(.secondary)
-                .padding(.horizontal)
+// HKWorkoutActivityType拡張
+extension HKWorkoutActivityType {
+    var displayName: String {
+        switch self {
+        case .traditionalStrengthTraining:
+            return "筋トレ"
+        case .functionalStrengthTraining:
+            return "機能的な筋トレ"
+        case .coreTraining:
+            return "コアトレーニング"
+        case .running:
+            return "ランニング"
+        case .walking:
+            return "ウォーキング"
+        case .cycling:
+            return "サイクリング"
+        case .swimming:
+            return "水泳"
+        case .yoga:
+            return "ヨガ"
+        case .pilates:
+            return "ピラティス"
+        case .mixedCardio:
+            return "混合有酸素運動"
+        default:
+            return "その他"
         }
-        .padding()
     }
-}
-
-struct AuthorizationView: View {
-    @ObservedObject var healthKitManager: HealthKitManager
     
-    var body: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "heart.slash")
-                .font(.system(size: 80))
-                .foregroundColor(.orange)
-            
-            Text("HealthKitの権限が必要です")
-                .font(.title2)
-                .fontWeight(.bold)
-            
-            Text("このアプリは健康データを表示するためにHealthKitへのアクセス権限が必要です。")
-                .font(.body)
-                .multilineTextAlignment(.center)
-                .foregroundColor(.secondary)
-                .padding(.horizontal)
-            
-            Button(action: {
-                healthKitManager.requestAuthorization()
-            }) {
-                HStack {
-                    Image(systemName: "heart.fill")
-                    Text("権限を許可する")
-                }
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(Color.blue)
-                .foregroundColor(.white)
-                .cornerRadius(10)
-            }
-            .padding(.horizontal)
+    var icon: String {
+        switch self {
+        case .traditionalStrengthTraining, .functionalStrengthTraining:
+            return "dumbbell.fill"
+        case .coreTraining:
+            return "figure.core.training"
+        case .running:
+            return "figure.run"
+        case .walking:
+            return "figure.walk"
+        case .cycling:
+            return "bicycle"
+        case .swimming:
+            return "figure.pool.swim"
+        case .yoga:
+            return "figure.mind.and.body"
+        case .pilates:
+            return "figure.pilates"
+        case .mixedCardio:
+            return "figure.mixed.cardio"
+        default:
+            return "figure.mixed.cardio"
         }
-        .padding()
+    }
+    
+    var color: Color {
+        switch self {
+        case .traditionalStrengthTraining, .functionalStrengthTraining, .coreTraining:
+            return .orange
+        case .running, .walking, .cycling, .swimming, .mixedCardio:
+            return .blue
+        case .yoga, .pilates:
+            return .green
+        default:
+            return .gray
+        }
     }
 }
 

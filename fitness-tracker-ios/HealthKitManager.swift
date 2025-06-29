@@ -12,6 +12,10 @@ class HealthKitManager: ObservableObject {
     @Published var authorizationStatus: String = "未確認"
     @Published var isHealthKitAvailable = false
     
+    // ワークアウト関連
+    @Published var currentWorkout: HKWorkout?
+    @Published var isWorkoutActive = false
+    
     init() {
         // HealthKitが利用可能かチェック
         isHealthKitAvailable = HKHealthStore.isHealthDataAvailable()
@@ -68,14 +72,23 @@ class HealthKitManager: ObservableObject {
             HKQuantityType.quantityType(forIdentifier: .bodyMassIndex)!,
             HKQuantityType.quantityType(forIdentifier: .dietaryWater)!,
             HKQuantityType.quantityType(forIdentifier: .dietaryEnergyConsumed)!,
-            HKCategoryType.categoryType(forIdentifier: .sleepAnalysis)!
+            HKQuantityType.quantityType(forIdentifier: .dietaryProtein)!,
+            HKQuantityType.quantityType(forIdentifier: .dietaryCarbohydrates)!,
+            HKQuantityType.quantityType(forIdentifier: .dietaryFatTotal)!,
+            HKCategoryType.categoryType(forIdentifier: .sleepAnalysis)!,
+            HKObjectType.workoutType()
         ]
         
         // 書き込み権限を要求するデータタイプ
         let typesToWrite: Set<HKSampleType> = [
             HKQuantityType.quantityType(forIdentifier: .stepCount)!,
             HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned)!,
-            HKQuantityType.quantityType(forIdentifier: .dietaryWater)!
+            HKQuantityType.quantityType(forIdentifier: .dietaryWater)!,
+            HKQuantityType.quantityType(forIdentifier: .dietaryEnergyConsumed)!,
+            HKQuantityType.quantityType(forIdentifier: .dietaryProtein)!,
+            HKQuantityType.quantityType(forIdentifier: .dietaryCarbohydrates)!,
+            HKQuantityType.quantityType(forIdentifier: .dietaryFatTotal)!,
+            HKObjectType.workoutType()
         ]
         
         healthStore.requestAuthorization(toShare: typesToWrite, read: typesToRead) { success, error in
@@ -94,6 +107,52 @@ class HealthKitManager: ObservableObject {
                     if let error = error {
                         print("HealthKit権限エラー: \(error.localizedDescription)")
                     }
+                }
+            }
+        }
+    }
+    
+    // ワークアウト開始
+    func startWorkout(type: HKWorkoutActivityType) {
+        let startDate = Date()
+        let workout = HKWorkout(activityType: type, start: startDate, end: startDate)
+        
+        healthStore.save(workout) { success, error in
+            DispatchQueue.main.async {
+                if success {
+                    self.currentWorkout = workout
+                    self.isWorkoutActive = true
+                    print("ワークアウトを開始しました: \(type.displayName)")
+                } else {
+                    print("ワークアウト開始エラー: \(error?.localizedDescription ?? "")")
+                }
+            }
+        }
+    }
+    
+    // ワークアウト終了
+    func endWorkout() {
+        guard let workout = currentWorkout else { return }
+        
+        let endDate = Date()
+        let updatedWorkout = HKWorkout(
+            activityType: workout.workoutActivityType,
+            start: workout.startDate,
+            end: endDate,
+            duration: endDate.timeIntervalSince(workout.startDate),
+            totalEnergyBurned: nil,
+            totalDistance: nil,
+            metadata: nil
+        )
+        
+        healthStore.save(updatedWorkout) { success, error in
+            DispatchQueue.main.async {
+                if success {
+                    self.currentWorkout = nil
+                    self.isWorkoutActive = false
+                    print("ワークアウトを終了しました")
+                } else {
+                    print("ワークアウト終了エラー: \(error?.localizedDescription ?? "")")
                 }
             }
         }
