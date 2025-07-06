@@ -249,26 +249,7 @@ struct NutritionCard: View {
     }
 }
 
-struct LegendItem: View {
-    let color: Color
-    let label: String
-    let percentage: Double
-    
-    var body: some View {
-        HStack(spacing: 5) {
-            Circle()
-                .fill(color)
-                .frame(width: 10, height: 10)
-            
-            Text(label)
-                .font(.caption)
-            
-            Text("\(Int(percentage * 100))%")
-                .font(.caption)
-                .fontWeight(.bold)
-        }
-    }
-}
+
 
 struct NutritionAdviceCard: View {
     let title: String
