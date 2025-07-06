@@ -54,6 +54,15 @@ struct ContentView: View {
                     Image(systemName: "chart.bar.fill")
                     Text("分析")
                 }
+            
+
+            
+            // デバッグ画面
+            DebugView()
+                .tabItem {
+                    Image(systemName: "ladybug.fill")
+                    Text("デバッグ")
+                }
         }
         .accentColor(.blue)
     }

@@ -1,10 +1,14 @@
 import SwiftUI
 import HealthKit
+import AVFoundation
 
 struct RealTimeWorkoutView: View {
     @StateObject private var viewModel: RealTimeWorkoutViewModel
+    @StateObject private var voiceManager = VoiceGuideManager.shared
     @State private var showingWorkoutPicker = false
     @State private var selectedWorkoutType: HKWorkoutActivityType = .traditionalStrengthTraining
+    @State private var showingExerciseSetup = false
+    @State private var selectedExercise: ExerciseType = .dumbbellPress
     
     init(healthKitManager: HealthKitManager) {
         self._viewModel = StateObject(wrappedValue: RealTimeWorkoutViewModel(healthKitManager: healthKitManager))
@@ -36,6 +40,9 @@ struct RealTimeWorkoutView: View {
                         // 統計カード
                         statsSection
                         
+                        // 音声ガイド設定
+                        voiceGuideSection
+                        
                         // コントロールボタン
                         controlSection
                         
@@ -50,6 +57,16 @@ struct RealTimeWorkoutView: View {
             .navigationBarHidden(true)
             .sheet(isPresented: $showingWorkoutPicker) {
                 WorkoutTypePickerView(selectedType: $selectedWorkoutType, isPresented: $showingWorkoutPicker)
+            }
+            .sheet(isPresented: $showingExerciseSetup) {
+                ExerciseSetupView(
+                    exercise: selectedExercise,
+                    isPresented: $showingExerciseSetup,
+                    onStart: { exercise, sets, reps, weight in
+                        viewModel.startVoiceGuidedWorkout(exercise: exercise, sets: sets, reps: reps, weight: weight)
+                        showingExerciseSetup = false
+                    }
+                )
             }
             .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { _ in
                 viewModel.updateWorkoutData()
@@ -205,6 +222,61 @@ struct RealTimeWorkoutView: View {
         }
     }
     
+    // MARK: - Voice Guide Section
+    private var voiceGuideSection: some View {
+        VStack(spacing: 15) {
+            HStack {
+                Text("音声ガイド")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(.white)
+                
+                Spacer()
+                
+                Button(action: {
+                    voiceManager.toggleVoiceGuide()
+                }) {
+                    HStack {
+                        Image(systemName: voiceManager.isEnabled ? "speaker.wave.3.fill" : "speaker.slash.fill")
+                        Text(voiceManager.isEnabled ? "ON" : "OFF")
+                    }
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(voiceManager.isEnabled ? Color.green.opacity(0.3) : Color.red.opacity(0.3))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(voiceManager.isEnabled ? Color.green.opacity(0.5) : Color.red.opacity(0.5), lineWidth: 1)
+                            )
+                    )
+                }
+            }
+            
+            if voiceManager.isSpeaking {
+                HStack {
+                    Image(systemName: "speaker.wave.2.fill")
+                        .foregroundColor(.yellow)
+                    Text(voiceManager.currentExercise)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.white)
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.yellow.opacity(0.1))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color.yellow.opacity(0.3), lineWidth: 1)
+                        )
+                )
+            }
+        }
+    }
+    
     // MARK: - Control Section
     private var controlSection: some View {
         VStack(spacing: 20) {
@@ -226,39 +298,72 @@ struct RealTimeWorkoutView: View {
                         .cornerRadius(15)
                     }
                     
-                    Button(action: viewModel.endWorkout) {
+                    Button(action: viewModel.completeSet) {
                         HStack {
-                            Image(systemName: "stop.fill")
-                            Text("終了")
+                            Image(systemName: "checkmark.circle.fill")
+                            Text("セット完了")
                         }
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 15)
                         .background(
-                            LinearGradient(colors: [.red.opacity(0.8), .pink.opacity(0.6)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                            LinearGradient(colors: [.green.opacity(0.8), .cyan.opacity(0.6)], startPoint: .topLeading, endPoint: .bottomTrailing)
                         )
                         .cornerRadius(15)
                     }
                 }
-            } else {
-                // ワークアウト開始ボタン
-                Button(action: {
-                    showingWorkoutPicker = true
-                }) {
+                
+                Button(action: viewModel.endWorkout) {
                     HStack {
-                        Image(systemName: "play.fill")
-                        Text("筋トレ開始")
+                        Image(systemName: "stop.fill")
+                        Text("ワークアウト終了")
                     }
-                    .font(.system(size: 18, weight: .bold))
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 20)
+                    .padding(.vertical, 15)
                     .background(
-                        LinearGradient(colors: [.orange.opacity(0.8), .red.opacity(0.6)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                        LinearGradient(colors: [.red.opacity(0.8), .pink.opacity(0.6)], startPoint: .topLeading, endPoint: .bottomTrailing)
                     )
-                    .cornerRadius(20)
-                    .shadow(color: .orange.opacity(0.3), radius: 10, x: 0, y: 5)
+                    .cornerRadius(15)
+                }
+            } else {
+                // ワークアウト開始ボタン
+                VStack(spacing: 15) {
+                    Button(action: {
+                        showingWorkoutPicker = true
+                    }) {
+                        HStack {
+                            Image(systemName: "play.fill")
+                            Text("通常筋トレ開始")
+                        }
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 15)
+                        .background(
+                            LinearGradient(colors: [.orange.opacity(0.8), .red.opacity(0.6)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                        )
+                        .cornerRadius(15)
+                    }
+                    
+                    Button(action: {
+                        showingExerciseSetup = true
+                    }) {
+                        HStack {
+                            Image(systemName: "speaker.wave.3.fill")
+                            Text("音声ガイド付き筋トレ")
+                        }
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 15)
+                        .background(
+                            LinearGradient(colors: [.cyan.opacity(0.8), .blue.opacity(0.6)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                        )
+                        .cornerRadius(15)
+                    }
                 }
             }
         }

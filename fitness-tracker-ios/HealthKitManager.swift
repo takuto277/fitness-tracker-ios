@@ -193,6 +193,12 @@ class HealthKitManager: ObservableObject {
     private func recordRealTimeData() {
         guard isWorkoutActive else { return }
         
+        // 権限が不足している場合は要求
+        if !isAuthorized {
+            requestAuthorization()
+            return
+        }
+        
         // 心拍数を記録
         if heartRate > 0 {
             recordHeartRate(heartRate)
@@ -207,6 +213,14 @@ class HealthKitManager: ObservableObject {
     /// 心拍数を記録
     private func recordHeartRate(_ heartRate: Double) {
         let heartRateType = HKQuantityType.quantityType(forIdentifier: .heartRate)!
+        
+        // 権限チェック
+        let status = healthStore.authorizationStatus(for: heartRateType)
+        guard status == .sharingAuthorized else {
+            print("心拍数記録エラー: Not authorized (Status: \(status))")
+            return
+        }
+        
         let heartRateQuantity = HKQuantity(unit: HKUnit(from: "count/min"), doubleValue: heartRate)
         let heartRateSample = HKQuantitySample(
             type: heartRateType,
@@ -229,6 +243,14 @@ class HealthKitManager: ObservableObject {
     /// 消費カロリーを記録
     private func recordActiveEnergy(_ energy: Double) {
         let energyType = HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned)!
+        
+        // 権限チェック
+        let status = healthStore.authorizationStatus(for: energyType)
+        guard status == .sharingAuthorized else {
+            print("消費カロリー記録エラー: Not authorized (Status: \(status))")
+            return
+        }
+        
         let energyQuantity = HKQuantity(unit: HKUnit.kilocalorie(), doubleValue: energy)
         let energySample = HKQuantitySample(
             type: energyType,

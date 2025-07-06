@@ -2,6 +2,35 @@ import SwiftUI
 import HealthKit
 import Combine
 
+// MARK: - Exercise Types
+enum ExerciseType: CaseIterable {
+    case dumbbellPress
+    case abs
+    case shoulderPress
+    
+    var displayName: String {
+        switch self {
+        case .dumbbellPress:
+            return "ダンベルプレス"
+        case .abs:
+            return "腹筋"
+        case .shoulderPress:
+            return "ショルダープレス"
+        }
+    }
+    
+    var icon: String {
+        switch self {
+        case .dumbbellPress:
+            return "dumbbell.fill"
+        case .abs:
+            return "figure.core.training"
+        case .shoulderPress:
+            return "figure.strengthtraining.traditional"
+        }
+    }
+}
+
 // MARK: - Output
 struct RealTimeWorkoutOutput {
     var selectedWorkoutType: HKWorkoutActivityType = .traditionalStrengthTraining
@@ -19,6 +48,12 @@ struct RealTimeWorkoutOutput {
     var recentWorkouts: [HKWorkout] = []
     var isAuthorized: Bool = false
     var isLoading: Bool = false
+    
+    // 音声ガイド関連
+    var isVoiceGuided: Bool = false
+    var currentExercise: ExerciseType = .dumbbellPress
+    var currentReps: Int = 10
+    var currentWeight: Double = 20.0
     
     // 計算プロパティ
     var formattedTime: String {
@@ -39,7 +74,9 @@ class RealTimeWorkoutViewModel: ObservableObject {
     @Published var output = RealTimeWorkoutOutput()
     
     private let healthKitManager: HealthKitManager
+    private let voiceManager = VoiceGuideManager.shared
     private var cancellables = Set<AnyCancellable>()
+    private var timer: Timer?
     // TimerはView側でonReceiveを使用するため、ここでは不要
     
     // 利用可能なワークアウトタイプ（筋トレ専用）
@@ -119,6 +156,11 @@ class RealTimeWorkoutViewModel: ObservableObject {
         output.workoutDuration = 0
         output.currentSet = 1
         output.restTimeRemaining = 0
+        output.isVoiceGuided = false
+        
+        // 音声ガイド停止
+        voiceManager.stopRestTimer()
+        voiceManager.stopSpeaking()
         
         healthKitManager.endWorkout()
     }
@@ -144,6 +186,121 @@ class RealTimeWorkoutViewModel: ObservableObject {
         )
         
         print("セット記録: \(output.currentSet - 1)セット目 - \(reps)回 × \(weight)kg")
+    }
+    
+    // MARK: - Voice Guided Workout
+    
+    func startVoiceGuidedWorkout(exercise: ExerciseType, sets: Int, reps: Int, weight: Double) {
+        output.currentExercise = exercise
+        output.totalSets = sets
+        output.currentReps = reps
+        output.currentWeight = weight
+        output.currentSet = 1
+        output.workoutDuration = 0
+        output.isWorkoutActive = true
+        output.isPaused = false
+        output.isVoiceGuided = true
+        output.workoutStartTime = Date()
+        
+        // HealthKitワークアウト開始
+        healthKitManager.startWorkout(type: .traditionalStrengthTraining)
+        
+        // 音声ガイド開始
+        voiceManager.announceExercise(exercise.displayName)
+        
+        // 準備時間（3秒）
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+            self.startVoiceGuidedSet()
+        }
+    }
+    
+    private func startVoiceGuidedSet() {
+        guard output.isWorkoutActive && !output.isPaused && output.isVoiceGuided else { return }
+        
+        // セット開始の音声ガイド
+        voiceManager.announceSetStart(setNumber: output.currentSet, totalSets: output.totalSets)
+        
+        // エクササイズ固有の音声ガイド
+        switch output.currentExercise {
+        case .dumbbellPress:
+            voiceManager.announceDumbbellPress(setNumber: output.currentSet, reps: output.currentReps, weight: output.currentWeight)
+        case .abs:
+            voiceManager.announceAbsExercise(setNumber: output.currentSet, reps: output.currentReps)
+        case .shoulderPress:
+            voiceManager.announceShoulderExercise(setNumber: output.currentSet, reps: output.currentReps, weight: output.currentWeight)
+        }
+        
+        // レップカウントダウン開始
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+            self.voiceManager.startRepCountdown(from: self.output.currentReps)
+        }
+    }
+    
+    func completeSet() {
+        guard output.isWorkoutActive else { return }
+        
+        if output.isVoiceGuided {
+            // 音声ガイド付きセット完了
+            voiceManager.announceSetComplete(setNumber: output.currentSet, reps: output.currentReps, weight: output.currentWeight)
+            
+            // HealthKitにセットデータを記録
+            healthKitManager.recordStrengthTrainingSet(
+                reps: output.currentReps,
+                weight: output.currentWeight,
+                exercise: output.currentExercise.displayName
+            )
+            
+            output.currentSet += 1
+            
+            if output.currentSet > output.totalSets {
+                // ワークアウト完了
+                completeVoiceGuidedWorkout()
+            } else {
+                // 休憩開始
+                startVoiceGuidedRest()
+            }
+        } else {
+            // 通常のセット完了
+            recordSet(reps: output.currentReps, weight: output.currentWeight)
+        }
+    }
+    
+    private func startVoiceGuidedRest() {
+        output.restTimeRemaining = 60
+        
+        // 休憩タイマー開始（60秒）
+        voiceManager.startRestTimer(seconds: 60)
+        
+        // 休憩終了後に次のセット開始
+        DispatchQueue.main.asyncAfter(deadline: .now() + 60) {
+            if self.output.isWorkoutActive && !self.output.isPaused && self.output.isVoiceGuided {
+                self.startVoiceGuidedSet()
+            }
+        }
+    }
+    
+    private func completeVoiceGuidedWorkout() {
+        output.isWorkoutActive = false
+        output.isVoiceGuided = false
+        
+        // ワークアウト完了の音声ガイド
+        voiceManager.announceWorkoutComplete()
+        
+        // HealthKitワークアウト終了
+        healthKitManager.endWorkout()
+        
+        // 3秒後にリセット
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+            self.resetWorkout()
+        }
+    }
+    
+    private func resetWorkout() {
+        output.currentSet = 1
+        output.workoutDuration = 0
+        output.restTimeRemaining = 0
+        output.isVoiceGuided = false
+        output.workoutStartTime = nil
     }
     
     func fetchRecentWorkouts() {

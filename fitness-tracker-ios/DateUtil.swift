@@ -30,6 +30,11 @@ class DateUtil {
         return dateFormatter.string(from: date)
     }
     
+    func formatJapaneseDateTime(_ date: Date) -> String {
+        dateFormatter.dateFormat = "yyyy年MM月dd日 HH:mm:ss"
+        return dateFormatter.string(from: date)
+    }
+    
     func getWeekdayString(_ date: Date) -> String {
         dateFormatter.dateFormat = "E"
         return dateFormatter.string(from: date)
