@@ -2,9 +2,11 @@ import SwiftUI
 import HealthKit
 
 struct NutritionAnalysisView: View {
-    @EnvironmentObject var nutritionManager: NutritionManager
-    @State private var showingInputSheet = false
-    @State private var showingPhotoAnalysis = false
+    @StateObject private var viewModel: NutritionAnalysisViewModel
+    
+    init() {
+        self._viewModel = StateObject(wrappedValue: NutritionAnalysisViewModel())
+    }
     
     var body: some View {
         NavigationView {
@@ -25,11 +27,11 @@ struct NutritionAnalysisView: View {
                 .padding()
             }
             .navigationTitle("栄養分析")
-            .sheet(isPresented: $showingInputSheet) {
-                NutritionInputView(nutritionManager: nutritionManager)
+            .sheet(isPresented: $viewModel.output.showingInputSheet) {
+                NutritionInputView(viewModel: viewModel)
             }
-            .sheet(isPresented: $showingPhotoAnalysis) {
-                PhotoAnalysisView(nutritionManager: nutritionManager)
+            .sheet(isPresented: $viewModel.output.showingPhotoAnalysis) {
+                PhotoAnalysisView(viewModel: viewModel)
             }
         }
     }
@@ -43,7 +45,7 @@ struct NutritionAnalysisView: View {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 15) {
                 NutritionCard(
                     title: "カロリー",
-                    value: "\(Int(nutritionManager.todayCalories))",
+                    value: "\(Int(viewModel.output.todayCalories))",
                     unit: "kcal",
                     icon: "flame.fill",
                     color: .orange
@@ -51,7 +53,7 @@ struct NutritionAnalysisView: View {
                 
                 NutritionCard(
                     title: "タンパク質",
-                    value: "\(String(format: "%.1f", nutritionManager.todayProtein))",
+                    value: "\(String(format: "%.1f", viewModel.output.todayProtein))",
                     unit: "g",
                     icon: "dumbbell.fill",
                     color: .green
@@ -59,7 +61,7 @@ struct NutritionAnalysisView: View {
                 
                 NutritionCard(
                     title: "炭水化物",
-                    value: "\(String(format: "%.1f", nutritionManager.todayCarbs))",
+                    value: "\(String(format: "%.1f", viewModel.output.todayCarbs))",
                     unit: "g",
                     icon: "leaf.fill",
                     color: .blue
@@ -67,7 +69,7 @@ struct NutritionAnalysisView: View {
                 
                 NutritionCard(
                     title: "脂質",
-                    value: "\(String(format: "%.1f", nutritionManager.todayFat))",
+                    value: "\(String(format: "%.1f", viewModel.output.todayFat))",
                     unit: "g",
                     icon: "drop.fill",
                     color: .yellow
@@ -89,21 +91,21 @@ struct NutritionAnalysisView: View {
                 
                 // タンパク質
                 Circle()
-                    .trim(from: 0, to: proteinPercentage)
+                    .trim(from: 0, to: viewModel.output.proteinPercentage)
                     .stroke(Color.green, style: StrokeStyle(lineWidth: 20, lineCap: .round))
                     .frame(width: 150, height: 150)
                     .rotationEffect(.degrees(-90))
                 
                 // 炭水化物
                 Circle()
-                    .trim(from: proteinPercentage, to: proteinPercentage + carbsPercentage)
+                    .trim(from: viewModel.output.proteinPercentage, to: viewModel.output.proteinPercentage + viewModel.output.carbsPercentage)
                     .stroke(Color.blue, style: StrokeStyle(lineWidth: 20, lineCap: .round))
                     .frame(width: 150, height: 150)
                     .rotationEffect(.degrees(-90))
                 
                 // 脂質
                 Circle()
-                    .trim(from: proteinPercentage + carbsPercentage, to: 1.0)
+                    .trim(from: viewModel.output.proteinPercentage + viewModel.output.carbsPercentage, to: 1.0)
                     .stroke(Color.yellow, style: StrokeStyle(lineWidth: 20, lineCap: .round))
                     .frame(width: 150, height: 150)
                     .rotationEffect(.degrees(-90))
@@ -120,9 +122,9 @@ struct NutritionAnalysisView: View {
             
             // 凡例
             HStack(spacing: 20) {
-                LegendItem(color: .green, label: "タンパク質", percentage: proteinPercentage)
-                LegendItem(color: .blue, label: "炭水化物", percentage: carbsPercentage)
-                LegendItem(color: .yellow, label: "脂質", percentage: fatPercentage)
+                LegendItem(color: .green, label: "タンパク質", percentage: viewModel.output.proteinPercentage)
+                LegendItem(color: .blue, label: "炭水化物", percentage: viewModel.output.carbsPercentage)
+                LegendItem(color: .yellow, label: "脂質", percentage: viewModel.output.fatPercentage)
             }
         }
         .padding()
@@ -137,7 +139,7 @@ struct NutritionAnalysisView: View {
             
             HStack(spacing: 20) {
                 Button(action: {
-                    showingInputSheet = true
+                    viewModel.showInputSheet()
                 }) {
                     VStack {
                         Image(systemName: "pencil")
@@ -160,7 +162,7 @@ struct NutritionAnalysisView: View {
                 }
                 
                 Button(action: {
-                    showingPhotoAnalysis = true
+                    viewModel.showPhotoAnalysis()
                 }) {
                     VStack {
                         Image(systemName: "camera")
@@ -193,75 +195,26 @@ struct NutritionAnalysisView: View {
             VStack(alignment: .leading, spacing: 10) {
                 NutritionAdviceCard(
                     title: "タンパク質",
-                    message: proteinAdvice,
+                    message: viewModel.output.proteinAdvice,
                     color: .green
                 )
                 
                 NutritionAdviceCard(
                     title: "炭水化物",
-                    message: carbsAdvice,
+                    message: viewModel.output.carbsAdvice,
                     color: .blue
                 )
                 
                 NutritionAdviceCard(
                     title: "脂質",
-                    message: fatAdvice,
+                    message: viewModel.output.fatAdvice,
                     color: .yellow
                 )
             }
         }
     }
     
-    // 計算プロパティ
-    private var totalCalories: Double {
-        return nutritionManager.todayProtein * 4 + nutritionManager.todayCarbs * 4 + nutritionManager.todayFat * 9
-    }
-    
-    private var proteinPercentage: Double {
-        guard totalCalories > 0 else { return 0 }
-        return (nutritionManager.todayProtein * 4) / totalCalories
-    }
-    
-    private var carbsPercentage: Double {
-        guard totalCalories > 0 else { return 0 }
-        return (nutritionManager.todayCarbs * 4) / totalCalories
-    }
-    
-    private var fatPercentage: Double {
-        guard totalCalories > 0 else { return 0 }
-        return (nutritionManager.todayFat * 9) / totalCalories
-    }
-    
-    // アドバイス
-    private var proteinAdvice: String {
-        if nutritionManager.todayProtein < 60 {
-            return "タンパク質が不足しています。鶏肉、魚、卵、豆類を積極的に摂取しましょう。"
-        } else if nutritionManager.todayProtein > 120 {
-            return "タンパク質の摂取量が多すぎます。適度な量に調整しましょう。"
-        } else {
-            return "タンパク質の摂取量は適切です。この調子で維持しましょう。"
-        }
-    }
-    
-    private var carbsAdvice: String {
-        if nutritionManager.todayCarbs < 100 {
-            return "炭水化物が不足しています。ご飯、パン、麺類を適度に摂取しましょう。"
-        } else if nutritionManager.todayCarbs > 300 {
-            return "炭水化物の摂取量が多すぎます。減量中は控えめにしましょう。"
-        } else {
-            return "炭水化物の摂取量は適切です。"
-        }
-    }
-    
-    private var fatAdvice: String {
-        if nutritionManager.todayFat < 30 {
-            return "脂質が不足しています。良質な油（オリーブオイル、ナッツ類）を摂取しましょう。"
-        } else if nutritionManager.todayFat > 80 {
-            return "脂質の摂取量が多すぎます。揚げ物や脂っこい料理を控えましょう。"
-        } else {
-            return "脂質の摂取量は適切です。"
-        }
-    }
+
 }
 
 struct NutritionCard: View {
@@ -343,7 +296,7 @@ struct NutritionAdviceCard: View {
 }
 
 struct NutritionInputView: View {
-    @ObservedObject var nutritionManager: NutritionManager
+    @ObservedObject var viewModel: NutritionAnalysisViewModel
     @Environment(\.dismiss) private var dismiss
     
     @State private var calories: String = ""
@@ -413,7 +366,7 @@ struct NutritionInputView: View {
         let carbsValue = Double(carbs) ?? 0
         let fatValue = Double(fat) ?? 0
         
-        nutritionManager.addNutritionData(
+        viewModel.addNutritionData(
             calories: caloriesValue,
             protein: proteinValue,
             carbs: carbsValue,
@@ -425,7 +378,7 @@ struct NutritionInputView: View {
 }
 
 struct PhotoAnalysisView: View {
-    @ObservedObject var nutritionManager: NutritionManager
+    @ObservedObject var viewModel: NutritionAnalysisViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var showingImagePicker = false
     @State private var selectedImage: UIImage?

@@ -2,9 +2,13 @@ import SwiftUI
 import HealthKit
 
 struct BodyCompositionView: View {
-    @EnvironmentObject var bodyCompositionManager: BodyCompositionManager
-    @State private var showingInputSheet = false
-    @State private var selectedDataType: BodyDataType = .weight
+    @StateObject private var viewModel: BodyCompositionViewModel
+    
+    init(bodyCompositionManager: BodyCompositionManager) {
+        self._viewModel = StateObject(wrappedValue: BodyCompositionViewModel(
+            bodyCompositionManager: bodyCompositionManager
+        ))
+    }
     
     var body: some View {
         NavigationView {
@@ -25,10 +29,10 @@ struct BodyCompositionView: View {
                 .padding()
             }
             .navigationTitle("体組成管理")
-            .sheet(isPresented: $showingInputSheet) {
+            .sheet(isPresented: $viewModel.output.showingInputSheet) {
                 BodyCompositionInputView(
-                    dataType: selectedDataType,
-                    bodyCompositionManager: bodyCompositionManager
+                    dataType: viewModel.output.selectedDataType,
+                    viewModel: viewModel
                 )
             }
         }
@@ -43,34 +47,34 @@ struct BodyCompositionView: View {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 15) {
                 BodyCompositionCard(
                     title: "体重",
-                    value: "\(String(format: "%.1f", bodyCompositionManager.currentWeight))",
+                    value: "\(String(format: "%.1f", viewModel.output.currentWeight))",
                     unit: "kg",
-                    change: bodyCompositionManager.getWeightChange(),
+                    change: viewModel.output.weightChange,
                     icon: "scalemass.fill",
                     color: .purple
                 )
                 
                 BodyCompositionCard(
                     title: "筋肉量",
-                    value: "\(String(format: "%.1f", bodyCompositionManager.currentMuscleMass))",
+                    value: "\(String(format: "%.1f", viewModel.output.currentMuscleMass))",
                     unit: "kg",
-                    change: bodyCompositionManager.getMuscleMassChange(),
+                    change: viewModel.output.muscleMassChange,
                     icon: "dumbbell.fill",
                     color: .green
                 )
                 
                 BodyCompositionCard(
                     title: "体脂肪率",
-                    value: "\(String(format: "%.1f", bodyCompositionManager.currentBodyFatPercentage))",
+                    value: "\(String(format: "%.1f", viewModel.output.currentBodyFatPercentage))",
                     unit: "%",
-                    change: bodyCompositionManager.getBodyFatChange(),
+                    change: viewModel.output.bodyFatChange,
                     icon: "chart.pie.fill",
                     color: .orange
                 )
                 
                 BodyCompositionCard(
                     title: "基礎代謝",
-                    value: "\(Int(bodyCompositionManager.currentBasalMetabolicRate))",
+                    value: "\(Int(viewModel.output.currentBasalMetabolicRate))",
                     unit: "kcal",
                     change: 0,
                     icon: "flame.fill",
@@ -88,8 +92,7 @@ struct BodyCompositionView: View {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 10) {
                 ForEach(BodyDataType.allCases, id: \.self) { dataType in
                     Button(action: {
-                        selectedDataType = dataType
-                        showingInputSheet = true
+                        viewModel.showInputSheet(for: dataType)
                     }) {
                         VStack {
                             Image(systemName: dataType.icon)
@@ -121,7 +124,7 @@ struct BodyCompositionView: View {
             
             // 簡易的な履歴表示（実際のアプリではグラフを実装）
             VStack(alignment: .leading, spacing: 10) {
-                ForEach(Array(bodyCompositionManager.bodyCompositionHistory.prefix(5))) { record in
+                ForEach(Array(viewModel.output.bodyCompositionHistory.prefix(5))) { record in
                     HStack {
                         Text(DateUtil.shared.formatJapaneseDate(record.date))
                             .font(.caption)
@@ -155,21 +158,21 @@ struct BodyCompositionView: View {
             VStack(spacing: 10) {
                 GoalRow(
                     title: "目標体重",
-                    current: bodyCompositionManager.currentWeight,
+                    current: viewModel.output.currentWeight,
                     target: 65.0, // 実際のアプリでは設定から取得
                     unit: "kg"
                 )
                 
                 GoalRow(
                     title: "目標筋肉量",
-                    current: bodyCompositionManager.currentMuscleMass,
+                    current: viewModel.output.currentMuscleMass,
                     target: 45.0,
                     unit: "kg"
                 )
                 
                 GoalRow(
                     title: "目標体脂肪率",
-                    current: bodyCompositionManager.currentBodyFatPercentage,
+                    current: viewModel.output.currentBodyFatPercentage,
                     target: 15.0,
                     unit: "%"
                 )
@@ -293,7 +296,7 @@ enum BodyDataType: CaseIterable {
 
 struct BodyCompositionInputView: View {
     let dataType: BodyDataType
-    @ObservedObject var bodyCompositionManager: BodyCompositionManager
+    @ObservedObject var viewModel: BodyCompositionViewModel
     @Environment(\.dismiss) private var dismiss
     
     @State private var value: String = ""
@@ -336,15 +339,17 @@ struct BodyCompositionInputView: View {
     private func saveData() {
         guard let doubleValue = Double(value) else { return }
         
-        switch dataType {
-        case .weight:
-            bodyCompositionManager.addWeightData(weight: doubleValue, date: date)
-        case .muscleMass:
-            bodyCompositionManager.addMuscleMassData(muscleMass: doubleValue, date: date)
-        case .bodyFatPercentage:
-            bodyCompositionManager.addBodyFatPercentageData(bodyFatPercentage: doubleValue, date: date)
+        Task {
+            switch dataType {
+            case .weight:
+                await viewModel.addWeightData(weight: doubleValue, date: date)
+            case .muscleMass:
+                await viewModel.addMuscleMassData(muscleMass: doubleValue, date: date)
+            case .bodyFatPercentage:
+                await viewModel.addBodyFatPercentageData(bodyFatPercentage: doubleValue, date: date)
+            }
+            
+            dismiss()
         }
-        
-        dismiss()
     }
 } 

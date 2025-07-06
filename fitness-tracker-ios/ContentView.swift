@@ -11,32 +11,31 @@ import HealthKit
 struct ContentView: View {
     @StateObject private var healthKitManager = HealthKitManager()
     @StateObject private var bodyCompositionManager = BodyCompositionManager()
-    @StateObject private var nutritionManager = NutritionManager()
+    @StateObject private var nutritionManager = NutritionManager.shared
     @StateObject private var progressManager = ProgressManager()
     
     var body: some View {
         TabView {
             // 統合ダッシュボード
-            DashboardView()
-                .environmentObject(healthKitManager)
-                .environmentObject(bodyCompositionManager)
-                .environmentObject(progressManager)
-                .tabItem {
-                    Image(systemName: "house.fill")
-                    Text("ダッシュボード")
-                }
+            DashboardView(
+                healthKitManager: healthKitManager,
+                bodyCompositionManager: bodyCompositionManager,
+                progressManager: progressManager
+            )
+            .tabItem {
+                Image(systemName: "house.fill")
+                Text("ダッシュボード")
+            }
             
             // リアルタイム運動
-            RealTimeWorkoutView()
-                .environmentObject(healthKitManager)
+            RealTimeWorkoutView(healthKitManager: healthKitManager)
                 .tabItem {
                     Image(systemName: "figure.run")
                     Text("リアルタイム運動")
                 }
             
             // 体組成管理
-            BodyCompositionView()
-                .environmentObject(bodyCompositionManager)
+            BodyCompositionView(bodyCompositionManager: bodyCompositionManager)
                 .tabItem {
                     Image(systemName: "scalemass.fill")
                     Text("体組成")
@@ -44,21 +43,21 @@ struct ContentView: View {
             
             // 栄養分析
             NutritionAnalysisView()
-                .environmentObject(nutritionManager)
                 .tabItem {
                     Image(systemName: "fork.knife")
                     Text("栄養分析")
                 }
             
             // 進捗分析
-            ProgressAnalysisView()
-                .environmentObject(progressManager)
-                .environmentObject(healthKitManager)
-                .environmentObject(bodyCompositionManager)
-                .tabItem {
-                    Image(systemName: "chart.line.uptrend.xyaxis")
-                    Text("進捗分析")
-                }
+            ProgressAnalysisView(
+                progressManager: progressManager,
+                healthKitManager: healthKitManager,
+                bodyCompositionManager: bodyCompositionManager
+            )
+            .tabItem {
+                Image(systemName: "chart.line.uptrend.xyaxis")
+                Text("進捗分析")
+            }
         }
         .accentColor(.blue)
     }
@@ -66,37 +65,29 @@ struct ContentView: View {
 
 // リアルタイム運動画面
 struct RealTimeWorkoutView: View {
-    @EnvironmentObject var healthKitManager: HealthKitManager
-    @State private var selectedWorkoutType: HKWorkoutActivityType = .traditionalStrengthTraining
-    @State private var isWorkoutActive = false
-    @State private var workoutStartTime: Date?
-    @State private var currentHeartRate: Double = 0
-    @State private var currentCalories: Double = 0
-    @State private var workoutDuration: TimeInterval = 0
+    @StateObject private var viewModel: RealTimeWorkoutViewModel
     
-    // 筋トレ専用データ
-    @State private var currentSet: Int = 0
-    @State private var currentReps: Int = 0
-    @State private var currentWeight: Double = 0
-    @State private var restTime: TimeInterval = 0
-    
-    let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    init(healthKitManager: HealthKitManager) {
+        self._viewModel = StateObject(wrappedValue: RealTimeWorkoutViewModel(
+            healthKitManager: healthKitManager
+        ))
+    }
     
     var body: some View {
         NavigationView {
             ScrollView {
                 VStack(spacing: 20) {
                     // ワークアウトタイプ選択
-                    if !isWorkoutActive {
+                    if !viewModel.output.isWorkoutActive {
                         workoutTypeSelector
                     }
                     
                     // リアルタイムデータ表示
-                    if isWorkoutActive {
+                    if viewModel.output.isWorkoutActive {
                         realTimeDataView
                         
                         // 筋トレ専用セクション
-                        if selectedWorkoutType == .traditionalStrengthTraining {
+                        if viewModel.output.selectedWorkoutType == .traditionalStrengthTraining {
                             strengthTrainingSection
                         }
                     }
@@ -107,9 +98,9 @@ struct RealTimeWorkoutView: View {
                 .padding()
             }
             .navigationTitle("リアルタイム運動")
-            .onReceive(timer) { _ in
-                if isWorkoutActive {
-                    updateWorkoutData()
+            .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { _ in
+                if viewModel.output.isWorkoutActive {
+                    viewModel.updateWorkoutData()
                 }
             }
         }
@@ -121,9 +112,9 @@ struct RealTimeWorkoutView: View {
                 .font(.headline)
             
             LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 10) {
-                ForEach(availableWorkoutTypes, id: \.self) { type in
+                ForEach(RealTimeWorkoutViewModel.availableWorkoutTypes, id: \.self) { type in
                     Button(action: {
-                        selectedWorkoutType = type
+                        viewModel.selectWorkoutType(type)
                     }) {
                         VStack {
                             Image(systemName: type.icon)
@@ -136,10 +127,10 @@ struct RealTimeWorkoutView: View {
                         .frame(height: 80)
                         .background(
                             RoundedRectangle(cornerRadius: 10)
-                                .fill(selectedWorkoutType == type ? type.color.opacity(0.2) : Color.gray.opacity(0.1))
+                                .fill(viewModel.output.selectedWorkoutType == type ? type.color.opacity(0.2) : Color.gray.opacity(0.1))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 10)
-                                        .stroke(selectedWorkoutType == type ? type.color : Color.clear, lineWidth: 2)
+                                        .stroke(viewModel.output.selectedWorkoutType == type ? type.color : Color.clear, lineWidth: 2)
                                 )
                         )
                     }
@@ -151,7 +142,7 @@ struct RealTimeWorkoutView: View {
     private var realTimeDataView: some View {
         VStack(spacing: 15) {
             // 時間表示
-            Text(timeString(from: workoutDuration))
+            Text(viewModel.timeString(from: viewModel.output.workoutDuration))
                 .font(.system(size: 48, weight: .bold, design: .monospaced))
                 .foregroundColor(.blue)
             
@@ -159,7 +150,7 @@ struct RealTimeWorkoutView: View {
             HStack(spacing: 20) {
                 DataCard(
                     title: "心拍数",
-                    value: "\(Int(currentHeartRate))",
+                    value: "\(Int(viewModel.output.currentHeartRate))",
                     unit: "BPM",
                     icon: "heart.fill",
                     color: .red
@@ -167,7 +158,7 @@ struct RealTimeWorkoutView: View {
                 
                 DataCard(
                     title: "カロリー",
-                    value: "\(Int(currentCalories))",
+                    value: "\(Int(viewModel.output.currentCalories))",
                     unit: "kcal",
                     icon: "flame.fill",
                     color: .orange
@@ -189,7 +180,7 @@ struct RealTimeWorkoutView: View {
                     Text("セット")
                         .font(.caption)
                         .foregroundColor(.secondary)
-                    Text("\(currentSet)")
+                    Text("\(viewModel.output.currentSet)")
                         .font(.title2)
                         .fontWeight(.bold)
                 }
@@ -198,7 +189,7 @@ struct RealTimeWorkoutView: View {
                     Text("レップ数")
                         .font(.caption)
                         .foregroundColor(.secondary)
-                    Text("\(currentReps)")
+                    Text("\(viewModel.output.currentReps)")
                         .font(.title2)
                         .fontWeight(.bold)
                 }
@@ -207,7 +198,7 @@ struct RealTimeWorkoutView: View {
                     Text("重量")
                         .font(.caption)
                         .foregroundColor(.secondary)
-                    Text("\(Int(currentWeight))kg")
+                    Text("\(Int(viewModel.output.currentWeight))kg")
                         .font(.title2)
                         .fontWeight(.bold)
                 }
@@ -215,14 +206,14 @@ struct RealTimeWorkoutView: View {
             
             // セット記録ボタン
             Button("セット記録") {
-                recordSet()
+                viewModel.recordSet()
             }
             .buttonStyle(.borderedProminent)
-            .disabled(currentReps == 0 || currentWeight == 0)
+            .disabled(viewModel.output.currentReps == 0 || viewModel.output.currentWeight == 0)
             
             // レストタイマー
-            if restTime > 0 {
-                Text("レスト: \(timeString(from: restTime))")
+            if viewModel.output.restTime > 0 {
+                Text("レスト: \(viewModel.timeString(from: viewModel.output.restTime))")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -234,15 +225,15 @@ struct RealTimeWorkoutView: View {
     
     private var controlButtons: some View {
         HStack(spacing: 20) {
-            if !isWorkoutActive {
+            if !viewModel.output.isWorkoutActive {
                 Button("ワークアウト開始") {
-                    startWorkout()
+                    viewModel.startWorkout()
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(!healthKitManager.isAuthorized)
+                .disabled(!viewModel.output.isAuthorized)
             } else {
                 Button("ワークアウト停止") {
-                    stopWorkout()
+                    viewModel.stopWorkout()
                 }
                 .buttonStyle(.borderedProminent)
                 .foregroundColor(.red)
@@ -250,77 +241,19 @@ struct RealTimeWorkoutView: View {
         }
     }
     
-    private func startWorkout() {
-        isWorkoutActive = true
-        workoutStartTime = Date()
-        currentSet = 1
-        currentReps = 0
-        currentWeight = 0
-        restTime = 0
-        
-        // HealthKitにワークアウト開始を記録
-        healthKitManager.startWorkout(type: selectedWorkoutType)
-    }
-    
-    private func stopWorkout() {
-        isWorkoutActive = false
-        workoutStartTime = nil
-        
-        // HealthKitにワークアウト終了を記録
-        healthKitManager.endWorkout()
-    }
-    
-    private func recordSet() {
-        // セット記録
-        currentSet += 1
-        currentReps = 0
-        currentWeight = 0
-        startRestTimer()
-    }
-    
-    private func startRestTimer() {
-        restTime = 0
-        // レストタイマーは既にメインタイマーで処理されている
-    }
-    
     private func updateWorkoutData() {
-        guard let startTime = workoutStartTime else { return }
+        guard let startTime = viewModel.output.workoutStartTime else { return }
         
         // ワークアウト時間の更新
-        workoutDuration = Date().timeIntervalSince(startTime)
+        viewModel.output.workoutDuration = Date().timeIntervalSince(startTime)
         
         // 心拍数とカロリーの取得（実際のアプリではHealthKitから取得）
         // ここではダミーデータを使用
-        currentHeartRate = Double.random(in: 120...180)
-        currentCalories = workoutDuration / 60 * 10 // 仮の計算
+        viewModel.output.currentHeartRate = Double.random(in: 120...180)
+        viewModel.output.currentCalories = viewModel.output.workoutDuration / 60 * 10 // 仮の計算
     }
     
-    private func timeString(from timeInterval: TimeInterval) -> String {
-        let hours = Int(timeInterval) / 3600
-        let minutes = Int(timeInterval) / 60 % 60
-        let seconds = Int(timeInterval) % 60
-        
-        if hours > 0 {
-            return String(format: "%02d:%02d:%02d", hours, minutes, seconds)
-        } else {
-            return String(format: "%02d:%02d", minutes, seconds)
-        }
-    }
-    
-    private var availableWorkoutTypes: [HKWorkoutActivityType] {
-        [
-            .traditionalStrengthTraining,
-            .functionalStrengthTraining,
-            .coreTraining,
-            .running,
-            .walking,
-            .cycling,
-            .swimming,
-            .yoga,
-            .pilates,
-            .mixedCardio
-        ]
-    }
+
 }
 
 // データカード
@@ -357,73 +290,7 @@ struct DataCard: View {
     }
 }
 
-// HKWorkoutActivityType拡張
-extension HKWorkoutActivityType {
-    var displayName: String {
-        switch self {
-        case .traditionalStrengthTraining:
-            return "筋トレ"
-        case .functionalStrengthTraining:
-            return "機能的な筋トレ"
-        case .coreTraining:
-            return "コアトレーニング"
-        case .running:
-            return "ランニング"
-        case .walking:
-            return "ウォーキング"
-        case .cycling:
-            return "サイクリング"
-        case .swimming:
-            return "水泳"
-        case .yoga:
-            return "ヨガ"
-        case .pilates:
-            return "ピラティス"
-        case .mixedCardio:
-            return "混合有酸素運動"
-        default:
-            return "その他"
-        }
-    }
-    
-    var icon: String {
-        switch self {
-        case .traditionalStrengthTraining, .functionalStrengthTraining:
-            return "dumbbell.fill"
-        case .coreTraining:
-            return "figure.core.training"
-        case .running:
-            return "figure.run"
-        case .walking:
-            return "figure.walk"
-        case .cycling:
-            return "bicycle"
-        case .swimming:
-            return "figure.pool.swim"
-        case .yoga:
-            return "figure.mind.and.body"
-        case .pilates:
-            return "figure.pilates"
-        case .mixedCardio:
-            return "figure.mixed.cardio"
-        default:
-            return "figure.mixed.cardio"
-        }
-    }
-    
-    var color: Color {
-        switch self {
-        case .traditionalStrengthTraining, .functionalStrengthTraining, .coreTraining:
-            return .orange
-        case .running, .walking, .cycling, .swimming, .mixedCardio:
-            return .blue
-        case .yoga, .pilates:
-            return .green
-        default:
-            return .gray
-        }
-    }
-}
+
 
 #Preview {
     ContentView()

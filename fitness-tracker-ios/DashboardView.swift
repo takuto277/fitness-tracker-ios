@@ -2,9 +2,19 @@ import SwiftUI
 import HealthKit
 
 struct DashboardView: View {
-    @EnvironmentObject var healthKitManager: HealthKitManager
-    @EnvironmentObject var bodyCompositionManager: BodyCompositionManager
-    @EnvironmentObject var progressManager: ProgressManager
+    @StateObject private var viewModel: DashboardViewModel
+    
+    init(
+        healthKitManager: HealthKitManager,
+        bodyCompositionManager: BodyCompositionManager,
+        progressManager: ProgressManager
+    ) {
+        self._viewModel = StateObject(wrappedValue: DashboardViewModel(
+            healthKitManager: healthKitManager,
+            bodyCompositionManager: bodyCompositionManager,
+            progressManager: progressManager
+        ))
+    }
     
     var body: some View {
         NavigationView {
@@ -29,8 +39,19 @@ struct DashboardView: View {
             }
             .navigationTitle("ダッシュボード")
             .refreshable {
-                refreshData()
+                await viewModel.refreshData()
             }
+            .overlay(
+                Group {
+                    if viewModel.output.isLoading {
+                        ProgressView("データを更新中...")
+                            .padding()
+                            .background(Color(.systemBackground))
+                            .cornerRadius(10)
+                            .shadow(radius: 5)
+                    }
+                }
+            )
         }
     }
     
@@ -44,7 +65,7 @@ struct DashboardView: View {
                 .font(.subheadline)
                 .foregroundColor(.secondary)
             
-            Text(DateUtil.shared.formatJapaneseDate(Date()))
+            Text(viewModel.output.currentDate)
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
@@ -63,14 +84,14 @@ struct DashboardView: View {
                     .frame(width: 150, height: 150)
                 
                 Circle()
-                    .trim(from: 0, to: progressManager.overallProgress)
+                    .trim(from: 0, to: viewModel.output.overallProgress)
                     .stroke(Color.blue, style: StrokeStyle(lineWidth: 20, lineCap: .round))
                     .frame(width: 150, height: 150)
                     .rotationEffect(.degrees(-90))
-                    .animation(.easeInOut(duration: 1.0), value: progressManager.overallProgress)
+                    .animation(.easeInOut(duration: 1.0), value: viewModel.output.overallProgress)
                 
                 VStack {
-                    Text("\(Int(progressManager.overallProgress * 100))%")
+                    Text("\(Int(viewModel.output.overallProgress * 100))%")
                         .font(.title)
                         .fontWeight(.bold)
                     Text("完了")
@@ -92,7 +113,7 @@ struct DashboardView: View {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 15) {
                 SummaryCard(
                     title: "歩数",
-                    value: "\(healthKitManager.stepCount)",
+                    value: "\(viewModel.output.stepCount)",
                     unit: "歩",
                     icon: "figure.walk",
                     color: .green
@@ -100,7 +121,7 @@ struct DashboardView: View {
                 
                 SummaryCard(
                     title: "心拍数",
-                    value: "\(Int(healthKitManager.heartRate))",
+                    value: "\(Int(viewModel.output.heartRate))",
                     unit: "BPM",
                     icon: "heart.fill",
                     color: .red
@@ -108,7 +129,7 @@ struct DashboardView: View {
                 
                 SummaryCard(
                     title: "消費カロリー",
-                    value: "\(Int(healthKitManager.activeEnergy))",
+                    value: "\(Int(viewModel.output.activeEnergy))",
                     unit: "kcal",
                     icon: "flame.fill",
                     color: .orange
@@ -116,7 +137,7 @@ struct DashboardView: View {
                 
                 SummaryCard(
                     title: "距離",
-                    value: "\(String(format: "%.1f", healthKitManager.distance / 1000))",
+                    value: "\(String(format: "%.1f", viewModel.output.distance / 1000))",
                     unit: "km",
                     icon: "location.fill",
                     color: .blue
@@ -133,7 +154,7 @@ struct DashboardView: View {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 15) {
                 SummaryCard(
                     title: "体重",
-                    value: "\(String(format: "%.1f", bodyCompositionManager.currentWeight))",
+                    value: "\(String(format: "%.1f", viewModel.output.currentWeight))",
                     unit: "kg",
                     icon: "scalemass.fill",
                     color: .purple
@@ -141,7 +162,7 @@ struct DashboardView: View {
                 
                 SummaryCard(
                     title: "筋肉量",
-                    value: "\(String(format: "%.1f", bodyCompositionManager.currentMuscleMass))",
+                    value: "\(String(format: "%.1f", viewModel.output.currentMuscleMass))",
                     unit: "kg",
                     icon: "dumbbell.fill",
                     color: .green
@@ -149,7 +170,7 @@ struct DashboardView: View {
                 
                 SummaryCard(
                     title: "体脂肪率",
-                    value: "\(String(format: "%.1f", bodyCompositionManager.currentBodyFatPercentage))",
+                    value: "\(String(format: "%.1f", viewModel.output.currentBodyFatPercentage))",
                     unit: "%",
                     icon: "chart.pie.fill",
                     color: .orange
@@ -157,7 +178,7 @@ struct DashboardView: View {
                 
                 SummaryCard(
                     title: "基礎代謝",
-                    value: "\(Int(bodyCompositionManager.currentBasalMetabolicRate))",
+                    value: "\(Int(viewModel.output.currentBasalMetabolicRate))",
                     unit: "kcal",
                     icon: "flame.fill",
                     color: .red
@@ -171,7 +192,7 @@ struct DashboardView: View {
             Text("運動サマリー")
                 .font(.headline)
             
-            if healthKitManager.isWorkoutActive {
+            if viewModel.output.isWorkoutActive {
                 HStack {
                     Image(systemName: "figure.run")
                         .font(.title2)
@@ -189,7 +210,7 @@ struct DashboardView: View {
                     Spacer()
                     
                     Button("停止") {
-                        healthKitManager.endWorkout()
+                        viewModel.endWorkout()
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(.red)
@@ -214,7 +235,7 @@ struct DashboardView: View {
                     Spacer()
                     
                     Button("開始") {
-                        // 運動開始画面に遷移
+                        viewModel.startWorkout()
                     }
                     .buttonStyle(.borderedProminent)
                 }
@@ -223,12 +244,6 @@ struct DashboardView: View {
                 .cornerRadius(10)
             }
         }
-    }
-    
-    private func refreshData() {
-        healthKitManager.fetchTodayData()
-        bodyCompositionManager.fetchLatestBodyCompositionData()
-        progressManager.calculateProgress()
     }
 }
 

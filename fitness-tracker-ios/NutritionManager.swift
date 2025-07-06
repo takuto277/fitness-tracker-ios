@@ -2,6 +2,8 @@ import Foundation
 import HealthKit
 
 class NutritionManager: ObservableObject {
+    static let shared = NutritionManager()
+    
     let healthStore = HKHealthStore()
     
     @Published var todayCalories: Double = 0
@@ -10,7 +12,7 @@ class NutritionManager: ObservableObject {
     @Published var todayFat: Double = 0
     @Published var todayWater: Double = 0
     
-    init() {
+    private init() {
         fetchTodayNutritionData()
     }
     
