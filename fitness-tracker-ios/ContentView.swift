@@ -58,6 +58,13 @@ struct ContentView: View {
                 Image(systemName: "chart.line.uptrend.xyaxis")
                 Text("進捗分析")
             }
+            
+            // 詳細分析
+            AdvancedAnalysisView()
+                .tabItem {
+                    Image(systemName: "brain.head.profile")
+                    Text("詳細分析")
+                }
         }
         .accentColor(.blue)
     }

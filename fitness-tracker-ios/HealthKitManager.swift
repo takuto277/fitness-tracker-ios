@@ -292,6 +292,52 @@ class HealthKitManager: ObservableObject {
         }
     }
     
+    // MARK: - Workout Data Fetching
+    
+    /// 指定期間のワークアウトデータを取得
+    func fetchWorkouts(from startDate: Date, to endDate: Date) async -> [HKWorkout] {
+        return await withCheckedContinuation { continuation in
+            let workoutType = HKObjectType.workoutType()
+            let predicate = HKQuery.predicateForSamples(withStart: startDate, end: endDate, options: .strictStartDate)
+            let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
+            
+            let query = HKSampleQuery(sampleType: workoutType, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: [sortDescriptor]) { _, samples, error in
+                if let error = error {
+                    print("ワークアウトデータ取得エラー: \(error.localizedDescription)")
+                    continuation.resume(returning: [])
+                    return
+                }
+                
+                let workouts = samples as? [HKWorkout] ?? []
+                print("取得したワークアウト数: \(workouts.count)")
+                continuation.resume(returning: workouts)
+            }
+            
+            healthStore.execute(query)
+        }
+    }
+    
+    /// 今日のワークアウトデータを取得
+    func fetchTodayWorkouts() async -> [HKWorkout] {
+        let startDate = Date().startOfDay
+        let endDate = Date().endOfDay
+        return await fetchWorkouts(from: startDate, to: endDate)
+    }
+    
+    /// 過去7日間のワークアウトデータを取得
+    func fetchWeeklyWorkouts() async -> [HKWorkout] {
+        let endDate = Date()
+        let startDate = Calendar.current.date(byAdding: .day, value: -7, to: endDate) ?? endDate
+        return await fetchWorkouts(from: startDate, to: endDate)
+    }
+    
+    /// 過去30日間のワークアウトデータを取得
+    func fetchMonthlyWorkouts() async -> [HKWorkout] {
+        let endDate = Date()
+        let startDate = Calendar.current.date(byAdding: .day, value: -30, to: endDate) ?? endDate
+        return await fetchWorkouts(from: startDate, to: endDate)
+    }
+    
     // テスト用のダミーデータを追加
     func addTestData() {
         addTestStepCount()

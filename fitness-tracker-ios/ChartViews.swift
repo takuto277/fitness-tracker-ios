@@ -207,4 +207,218 @@ struct LegendItem: View {
                 .fontWeight(.bold)
         }
     }
+}
+
+// MARK: - Muscle Gain Efficiency Chart
+struct MuscleGainEfficiencyChartView: View {
+    let efficiency: Double
+    let calorieBalance: Double
+    let proteinIntake: Double
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 15) {
+            Text("筋肉増加効率")
+                .font(.headline)
+            
+            // 効率ゲージ
+            VStack(spacing: 8) {
+                HStack {
+                    Text("効率")
+                        .font(.caption)
+                    Spacer()
+                    Text("\(Int(efficiency * 100))%")
+                        .font(.caption)
+                        .fontWeight(.bold)
+                }
+                
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        Rectangle()
+                            .fill(Color.gray.opacity(0.2))
+                            .frame(height: 20)
+                            .cornerRadius(10)
+                        
+                        Rectangle()
+                            .fill(efficiencyColor)
+                            .frame(width: geometry.size.width * efficiency, height: 20)
+                            .cornerRadius(10)
+                    }
+                }
+                .frame(height: 20)
+            }
+            
+            // 詳細指標
+            HStack(spacing: 20) {
+                VStack {
+                    Text("カロリー収支")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text("\(Int(calorieBalance))kcal")
+                        .font(.title3)
+                        .fontWeight(.bold)
+                        .foregroundColor(calorieBalanceColor)
+                }
+                
+                VStack {
+                    Text("タンパク質")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text("\(Int(proteinIntake))g")
+                        .font(.title3)
+                        .fontWeight(.bold)
+                        .foregroundColor(proteinColor)
+                }
+            }
+        }
+        .padding()
+        .background(Color.gray.opacity(0.1))
+        .cornerRadius(15)
+    }
+    
+    private var efficiencyColor: Color {
+        if efficiency >= 0.8 { return .green }
+        else if efficiency >= 0.6 { return .blue }
+        else if efficiency >= 0.4 { return .orange }
+        else { return .red }
+    }
+    
+    private var calorieBalanceColor: Color {
+        if calorieBalance >= 200 && calorieBalance <= 500 { return .green }
+        else if calorieBalance > 500 { return .orange }
+        else { return .red }
+    }
+    
+    private var proteinColor: Color {
+        if proteinIntake >= 120 { return .green }
+        else if proteinIntake >= 80 { return .orange }
+        else { return .red }
+    }
+}
+
+// MARK: - Workout Frequency Chart
+struct WorkoutFrequencyChartView: View {
+    let weeklyFrequency: Int
+    let recommendedFrequency: Int
+    let averageDuration: TimeInterval
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 15) {
+            Text("筋トレ頻度分析")
+                .font(.headline)
+            
+            HStack(spacing: 20) {
+                VStack {
+                    Text("現在")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text("\(weeklyFrequency)回/週")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(frequencyColor)
+                }
+                
+                VStack {
+                    Text("推奨")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text("\(recommendedFrequency)回/週")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(.blue)
+                }
+                
+                VStack {
+                    Text("平均時間")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text("\(Int(averageDuration / 60))分")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(.purple)
+                }
+            }
+            
+            // 頻度バー
+            HStack(spacing: 5) {
+                ForEach(1...7, id: \.self) { day in
+                    Rectangle()
+                        .fill(day <= weeklyFrequency ? Color.green : Color.gray.opacity(0.3))
+                        .frame(height: 30)
+                        .cornerRadius(5)
+                }
+            }
+        }
+        .padding()
+        .background(Color.gray.opacity(0.1))
+        .cornerRadius(15)
+    }
+    
+    private var frequencyColor: Color {
+        if weeklyFrequency >= recommendedFrequency { return .green }
+        else if weeklyFrequency >= 3 { return .orange }
+        else { return .red }
+    }
+}
+
+// MARK: - Calorie Balance Trend Chart
+struct CalorieBalanceTrendChartView: View {
+    let dailyBalances: [Double]
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("カロリー収支トレンド")
+                .font(.headline)
+            
+            Chart(Array(dailyBalances.enumerated()), id: \.offset) { index, balance in
+                BarMark(
+                    x: .value("日", index + 1),
+                    y: .value("収支", balance)
+                )
+                .foregroundStyle(balanceColor(for: balance))
+            }
+            .frame(height: 150)
+            .chartXAxis {
+                AxisMarks { value in
+                    AxisValueLabel("\(value.as(Int.self) ?? 0)日")
+                }
+            }
+            .chartYAxis {
+                AxisMarks { value in
+                    AxisValueLabel("\(Int(value.as(Double.self) ?? 0))kcal")
+                }
+            }
+            
+            // 週間平均
+            HStack {
+                Text("週間平均:")
+                    .font(.caption)
+                Text("\(Int(weeklyAverage))kcal")
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundColor(weeklyAverageColor)
+            }
+        }
+        .padding()
+        .background(Color.gray.opacity(0.1))
+        .cornerRadius(15)
+    }
+    
+    private var weeklyAverage: Double {
+        guard !dailyBalances.isEmpty else { return 0 }
+        return dailyBalances.reduce(0, +) / Double(dailyBalances.count)
+    }
+    
+    private func balanceColor(for balance: Double) -> Color {
+        if balance >= 200 && balance <= 500 { return .green }
+        else if balance > 500 { return .orange }
+        else if balance < -200 { return .red }
+        else { return .blue }
+    }
+    
+    private var weeklyAverageColor: Color {
+        if weeklyAverage >= 200 && weeklyAverage <= 500 { return .green }
+        else if weeklyAverage > 500 { return .orange }
+        else if weeklyAverage < -200 { return .red }
+        else { return .blue }
+    }
 } 
