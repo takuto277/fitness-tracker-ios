@@ -6,16 +6,31 @@ import Combine
 struct RealTimeWorkoutOutput {
     var selectedWorkoutType: HKWorkoutActivityType = .traditionalStrengthTraining
     var isWorkoutActive: Bool = false
+    var isPaused: Bool = false
     var workoutStartTime: Date?
-    var currentHeartRate: Double = 0
-    var currentCalories: Double = 0
+    var heartRate: Double = 0
+    var caloriesBurned: Double = 0
     var workoutDuration: TimeInterval = 0
-    var currentSet: Int = 0
-    var currentReps: Int = 0
-    var currentWeight: Double = 0
-    var restTime: TimeInterval = 0
+    var currentSet: Int = 1
+    var totalSets: Int = 5
+    var restTimeRemaining: Int = 0
+    var averageWeight: Double = 0
+    var totalWeight: Double = 0
+    var recentWorkouts: [HKWorkout] = []
     var isAuthorized: Bool = false
     var isLoading: Bool = false
+    
+    // 計算プロパティ
+    var formattedTime: String {
+        let minutes = Int(workoutDuration) / 60
+        let seconds = Int(workoutDuration) % 60
+        return String(format: "%02d:%02d", minutes, seconds)
+    }
+    
+    var progress: Double {
+        guard totalSets > 0 else { return 0 }
+        return Double(currentSet - 1) / Double(totalSets)
+    }
 }
 
 // MARK: - ViewModel
@@ -27,19 +42,16 @@ class RealTimeWorkoutViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     // TimerはView側でonReceiveを使用するため、ここでは不要
     
-    // 利用可能なワークアウトタイプ
+    // 利用可能なワークアウトタイプ（筋トレ専用）
     static let availableWorkoutTypes: [HKWorkoutActivityType] = [
-        .traditionalStrengthTraining,
-        .running,
-        .cycling,
-        .walking,
-        .swimming
+        .traditionalStrengthTraining
     ]
     
     init(healthKitManager: HealthKitManager) {
         self.healthKitManager = healthKitManager
         setupBindings()
         setupTimer()
+        fetchRecentWorkouts()
     }
     
     private func setupBindings() {
@@ -49,11 +61,11 @@ class RealTimeWorkoutViewModel: ObservableObject {
             .store(in: &cancellables)
         
         healthKitManager.$heartRate
-            .assign(to: \.output.currentHeartRate, on: self)
+            .assign(to: \.output.heartRate, on: self)
             .store(in: &cancellables)
         
         healthKitManager.$activeEnergy
-            .assign(to: \.output.currentCalories, on: self)
+            .assign(to: \.output.caloriesBurned, on: self)
             .store(in: &cancellables)
         
         healthKitManager.$isAuthorized
@@ -67,15 +79,15 @@ class RealTimeWorkoutViewModel: ObservableObject {
     }
     
     func updateWorkoutData() {
-        guard output.isWorkoutActive else { return }
+        guard output.isWorkoutActive && !output.isPaused else { return }
         
         if let startTime = output.workoutStartTime {
             output.workoutDuration = Date().timeIntervalSince(startTime)
         }
         
         // レストタイマーの更新
-        if output.restTime > 0 {
-            output.restTime -= 1
+        if output.restTimeRemaining > 0 {
+            output.restTimeRemaining -= 1
         }
     }
     
@@ -84,48 +96,72 @@ class RealTimeWorkoutViewModel: ObservableObject {
         output.selectedWorkoutType = type
     }
     
-    func startWorkout() {
+    func startWorkout(type: HKWorkoutActivityType) {
+        output.selectedWorkoutType = type
         output.isWorkoutActive = true
+        output.isPaused = false
         output.workoutStartTime = Date()
         output.workoutDuration = 0
-        output.currentCalories = 0
+        output.currentSet = 1
+        output.restTimeRemaining = 0
         
-        healthKitManager.startWorkout(type: output.selectedWorkoutType)
+        healthKitManager.startWorkout(type: type)
     }
     
-    func stopWorkout() {
+    func pauseWorkout() {
+        output.isPaused.toggle()
+    }
+    
+    func endWorkout() {
         output.isWorkoutActive = false
+        output.isPaused = false
         output.workoutStartTime = nil
         output.workoutDuration = 0
+        output.currentSet = 1
+        output.restTimeRemaining = 0
         
         healthKitManager.endWorkout()
     }
     
-    func recordSet() {
-        guard output.currentReps > 0 && output.currentWeight > 0 else { return }
+    func recordSet(reps: Int, weight: Double) {
+        guard reps > 0 && weight > 0 else { return }
         
         // セット記録の処理
         output.currentSet += 1
         
         // レストタイマー開始（90秒）
-        output.restTime = 90
+        output.restTimeRemaining = 90
         
-        // 実際のアプリでは、セットデータを保存
-        print("セット記録: \(output.currentSet)セット目 - \(output.currentReps)回 × \(output.currentWeight)kg")
+        // 統計データの更新
+        output.totalWeight += weight
+        output.averageWeight = output.totalWeight / Double(output.currentSet - 1)
+        
+        // HealthKitにセットデータを記録
+        healthKitManager.recordStrengthTrainingSet(
+            reps: reps,
+            weight: weight,
+            exercise: "Strength Training"
+        )
+        
+        print("セット記録: \(output.currentSet - 1)セット目 - \(reps)回 × \(weight)kg")
     }
     
-    func updateReps(_ reps: Int) {
-        output.currentReps = reps
-    }
-    
-    func updateWeight(_ weight: Double) {
-        output.currentWeight = weight
+    func fetchRecentWorkouts() {
+        healthKitManager.fetchRecentStrengthWorkouts { workouts in
+            DispatchQueue.main.async {
+                self.output.recentWorkouts = workouts
+            }
+        }
     }
     
     func timeString(from timeInterval: TimeInterval) -> String {
         let minutes = Int(timeInterval) / 60
         let seconds = Int(timeInterval) % 60
         return String(format: "%02d:%02d", minutes, seconds)
+    }
+    
+    func refreshData() {
+        fetchRecentWorkouts()
     }
     
     deinit {
@@ -139,14 +175,6 @@ extension HKWorkoutActivityType {
         switch self {
         case .traditionalStrengthTraining:
             return "筋トレ"
-        case .running:
-            return "ランニング"
-        case .cycling:
-            return "サイクリング"
-        case .walking:
-            return "ウォーキング"
-        case .swimming:
-            return "スイミング"
         default:
             return "その他"
         }
@@ -156,14 +184,6 @@ extension HKWorkoutActivityType {
         switch self {
         case .traditionalStrengthTraining:
             return "dumbbell.fill"
-        case .running:
-            return "figure.run"
-        case .cycling:
-            return "bicycle"
-        case .walking:
-            return "figure.walk"
-        case .swimming:
-            return "figure.pool.swim"
         default:
             return "figure.mixed.cardio"
         }
@@ -173,14 +193,6 @@ extension HKWorkoutActivityType {
         switch self {
         case .traditionalStrengthTraining:
             return .orange
-        case .running:
-            return .green
-        case .cycling:
-            return .blue
-        case .walking:
-            return .purple
-        case .swimming:
-            return .cyan
         default:
             return .gray
         }

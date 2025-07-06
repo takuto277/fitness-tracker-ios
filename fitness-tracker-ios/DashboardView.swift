@@ -37,7 +37,7 @@ struct DashboardView: View {
                 }
                 .padding()
             }
-            .navigationTitle("ダッシュボード")
+            .navigationTitle("筋トレダッシュボード")
             .refreshable {
                 await viewModel.refreshData()
             }
@@ -57,11 +57,11 @@ struct DashboardView: View {
     
     private var headerSection: some View {
         VStack {
-            Text("HealthKit Fit Journey")
+            Text("Strength Tracker")
                 .font(.largeTitle)
                 .fontWeight(.bold)
             
-            Text("ダイエット × 筋トレの両立")
+            Text("筋トレ専用フィットネスアプリ")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
             
@@ -74,7 +74,7 @@ struct DashboardView: View {
     
     private var overallProgressSection: some View {
         VStack(spacing: 15) {
-            Text("全体進捗")
+            Text("筋トレ進捗")
                 .font(.title2)
                 .fontWeight(.bold)
             
@@ -85,7 +85,7 @@ struct DashboardView: View {
                 
                 Circle()
                     .trim(from: 0, to: viewModel.output.overallProgress)
-                    .stroke(Color.blue, style: StrokeStyle(lineWidth: 20, lineCap: .round))
+                    .stroke(Color.orange, style: StrokeStyle(lineWidth: 20, lineCap: .round))
                     .frame(width: 150, height: 150)
                     .rotationEffect(.degrees(-90))
                     .animation(.easeInOut(duration: 1.0), value: viewModel.output.overallProgress)
@@ -101,22 +101,22 @@ struct DashboardView: View {
             }
         }
         .padding()
-        .background(Color.blue.opacity(0.1))
+        .background(Color.orange.opacity(0.1))
         .cornerRadius(15)
     }
     
     private var todaySummarySection: some View {
         VStack(spacing: 15) {
-            Text("今日のサマリー")
+            Text("今週の筋トレサマリー")
                 .font(.headline)
             
             LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 15) {
                 SummaryCard(
-                    title: "歩数",
-                    value: "\(viewModel.output.stepCount)",
-                    unit: "歩",
-                    icon: "figure.walk",
-                    color: .green
+                    title: "筋トレ回数",
+                    value: "\(viewModel.output.weeklyWorkoutCount)",
+                    unit: "回",
+                    icon: "dumbbell.fill",
+                    color: .orange
                 )
                 
                 SummaryCard(
@@ -136,11 +136,11 @@ struct DashboardView: View {
                 )
                 
                 SummaryCard(
-                    title: "距離",
-                    value: "\(String(format: "%.1f", viewModel.output.distance / 1000))",
-                    unit: "km",
-                    icon: "location.fill",
-                    color: .blue
+                    title: "平均時間",
+                    value: "\(Int(viewModel.output.averageWorkoutDuration / 60))",
+                    unit: "分",
+                    icon: "clock.fill",
+                    color: .purple
                 )
             }
         }
@@ -148,7 +148,7 @@ struct DashboardView: View {
     
     private var bodyCompositionSection: some View {
         VStack(spacing: 15) {
-            Text("体組成サマリー")
+            Text("体組成")
                 .font(.headline)
             
             LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 15) {
@@ -189,20 +189,20 @@ struct DashboardView: View {
     
     private var workoutSummarySection: some View {
         VStack(spacing: 15) {
-            Text("運動サマリー")
+            Text("筋トレサマリー")
                 .font(.headline)
             
             if viewModel.output.isWorkoutActive {
                 HStack {
-                    Image(systemName: "figure.run")
+                    Image(systemName: "dumbbell.fill")
                         .font(.title2)
-                        .foregroundColor(.green)
+                        .foregroundColor(.orange)
                     
                     VStack(alignment: .leading) {
-                        Text("運動中")
+                        Text("筋トレ中")
                             .font(.headline)
-                            .foregroundColor(.green)
-                        Text("現在ワークアウトを実行中です")
+                            .foregroundColor(.orange)
+                        Text("現在筋トレセッションを実行中です")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -216,18 +216,18 @@ struct DashboardView: View {
                     .tint(.red)
                 }
                 .padding()
-                .background(Color.green.opacity(0.1))
+                .background(Color.orange.opacity(0.1))
                 .cornerRadius(10)
             } else {
                 HStack {
-                    Image(systemName: "figure.run")
+                    Image(systemName: "dumbbell.fill")
                         .font(.title2)
                         .foregroundColor(.blue)
                     
                     VStack(alignment: .leading) {
-                        Text("運動を開始")
+                        Text("筋トレを開始")
                             .font(.headline)
-                        Text("タップして運動を記録")
+                        Text("タップして筋トレを記録")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }

@@ -4,10 +4,10 @@ import Combine
 
 // MARK: - Output
 struct DashboardOutput {
-    var stepCount: Int = 0
+    var weeklyWorkoutCount: Int = 0
     var heartRate: Double = 0
     var activeEnergy: Double = 0
-    var distance: Double = 0
+    var averageWorkoutDuration: TimeInterval = 0
     var currentWeight: Double = 0
     var currentMuscleMass: Double = 0
     var currentBodyFatPercentage: Double = 0
@@ -43,8 +43,8 @@ class DashboardViewModel: ObservableObject {
     
     private func setupBindings() {
         // HealthKitManagerのデータ変更を監視
-        healthKitManager.$stepCount
-            .assign(to: \.output.stepCount, on: self)
+        healthKitManager.$weeklyWorkoutCount
+            .assign(to: \.output.weeklyWorkoutCount, on: self)
             .store(in: &cancellables)
         
         healthKitManager.$heartRate
@@ -55,8 +55,8 @@ class DashboardViewModel: ObservableObject {
             .assign(to: \.output.activeEnergy, on: self)
             .store(in: &cancellables)
         
-        healthKitManager.$distance
-            .assign(to: \.output.distance, on: self)
+        healthKitManager.$averageWorkoutDuration
+            .assign(to: \.output.averageWorkoutDuration, on: self)
             .store(in: &cancellables)
         
         healthKitManager.$isWorkoutActive

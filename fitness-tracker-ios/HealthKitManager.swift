@@ -4,10 +4,10 @@ import HealthKit
 class HealthKitManager: ObservableObject {
     let healthStore = HKHealthStore()
     
-    @Published var stepCount: Int = 0
+    @Published var weeklyWorkoutCount: Int = 0
     @Published var heartRate: Double = 0.0
     @Published var activeEnergy: Double = 0.0
-    @Published var distance: Double = 0.0
+    @Published var averageWorkoutDuration: TimeInterval = 0.0
     @Published var isAuthorized = false
     @Published var authorizationStatus: String = "未確認"
     @Published var isHealthKitAvailable = false
@@ -123,6 +123,9 @@ class HealthKitManager: ObservableObject {
                     self.currentWorkout = workout
                     self.isWorkoutActive = true
                     print("ワークアウトを開始しました: \(type.displayName)")
+                    
+                    // ワークアウト開始後にリアルタイムデータの記録を開始
+                    self.startRealTimeDataRecording()
                 } else {
                     print("ワークアウト開始エラー: \(error?.localizedDescription ?? "")")
                 }
@@ -135,14 +138,21 @@ class HealthKitManager: ObservableObject {
         guard let workout = currentWorkout else { return }
         
         let endDate = Date()
+        
+        // ワークアウト中の総消費カロリーを計算
+        let totalCalories = HKQuantity(unit: HKUnit.kilocalorie(), doubleValue: self.activeEnergy)
+        
         let updatedWorkout = HKWorkout(
             activityType: workout.workoutActivityType,
             start: workout.startDate,
             end: endDate,
             duration: endDate.timeIntervalSince(workout.startDate),
-            totalEnergyBurned: nil,
+            totalEnergyBurned: totalCalories,
             totalDistance: nil,
-            metadata: nil
+            metadata: [
+                "app_name": "FitnessTracker",
+                "workout_type": workout.workoutActivityType.displayName
+            ]
         )
         
         healthStore.save(updatedWorkout) { success, error in
@@ -151,6 +161,9 @@ class HealthKitManager: ObservableObject {
                     self.currentWorkout = nil
                     self.isWorkoutActive = false
                     print("ワークアウトを終了しました")
+                    
+                    // リアルタイムデータ記録を停止
+                    self.stopRealTimeDataRecording()
                 } else {
                     print("ワークアウト終了エラー: \(error?.localizedDescription ?? "")")
                 }
@@ -158,35 +171,130 @@ class HealthKitManager: ObservableObject {
         }
     }
     
-    func fetchTodayData() {
-        fetchStepCount()
-        fetchHeartRate()
-        fetchActiveEnergy()
-        fetchDistance()
+    // MARK: - Real-time Data Recording
+    
+    private var realTimeDataTimer: Timer?
+    
+    /// リアルタイムデータ記録を開始
+    private func startRealTimeDataRecording() {
+        // 1秒ごとにデータを記録
+        realTimeDataTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
+            self.recordRealTimeData()
+        }
     }
     
-    private func fetchStepCount() {
-        let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount)!
-        // 過去7日間のデータを取得
+    /// リアルタイムデータ記録を停止
+    private func stopRealTimeDataRecording() {
+        realTimeDataTimer?.invalidate()
+        realTimeDataTimer = nil
+    }
+    
+    /// リアルタイムデータを記録
+    private func recordRealTimeData() {
+        guard isWorkoutActive else { return }
+        
+        // 心拍数を記録
+        if heartRate > 0 {
+            recordHeartRate(heartRate)
+        }
+        
+        // 消費カロリーを記録
+        if activeEnergy > 0 {
+            recordActiveEnergy(activeEnergy)
+        }
+    }
+    
+    /// 心拍数を記録
+    private func recordHeartRate(_ heartRate: Double) {
+        let heartRateType = HKQuantityType.quantityType(forIdentifier: .heartRate)!
+        let heartRateQuantity = HKQuantity(unit: HKUnit(from: "count/min"), doubleValue: heartRate)
+        let heartRateSample = HKQuantitySample(
+            type: heartRateType,
+            quantity: heartRateQuantity,
+            start: Date(),
+            end: Date(),
+            device: nil,
+            metadata: [
+                "workout_session": "active"
+            ]
+        )
+        
+        healthStore.save(heartRateSample) { success, error in
+            if !success {
+                print("心拍数記録エラー: \(error?.localizedDescription ?? "")")
+            }
+        }
+    }
+    
+    /// 消費カロリーを記録
+    private func recordActiveEnergy(_ energy: Double) {
+        let energyType = HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned)!
+        let energyQuantity = HKQuantity(unit: HKUnit.kilocalorie(), doubleValue: energy)
+        let energySample = HKQuantitySample(
+            type: energyType,
+            quantity: energyQuantity,
+            start: Date(),
+            end: Date(),
+            device: nil,
+            metadata: [
+                "workout_session": "active"
+            ]
+        )
+        
+        healthStore.save(energySample) { success, error in
+            if !success {
+                print("消費カロリー記録エラー: \(error?.localizedDescription ?? "")")
+            }
+        }
+    }
+    
+    /// 筋トレセットデータを記録
+    func recordStrengthTrainingSet(reps: Int, weight: Double, exercise: String) {
+        guard isWorkoutActive else { return }
+        
+        // セットデータをメタデータとして記録
+        let metadata: [String: Any] = [
+            "exercise_type": exercise,
+            "reps": reps,
+            "weight_kg": weight,
+            "set_number": 1, // 実際のアプリではセット数を管理
+            "workout_session": "active"
+        ]
+        
+        // 消費カロリーを推定して記録
+        let estimatedCalories = Double(reps) * weight * 0.1 // 簡易計算
+        recordActiveEnergy(estimatedCalories)
+        
+        print("筋トレセット記録: \(exercise) - \(reps)回 × \(weight)kg")
+    }
+    
+    func fetchTodayData() {
+        fetchWeeklyWorkoutCount()
+        fetchHeartRate()
+        fetchActiveEnergy()
+        fetchAverageWorkoutDuration()
+    }
+    
+    private func fetchWeeklyWorkoutCount() {
+        let workoutType = HKObjectType.workoutType()
+        // 過去7日間の筋トレデータを取得
         let startDate = Calendar.current.date(byAdding: .day, value: -7, to: Date())!
         let predicate = HKQuery.predicateForSamples(withStart: startDate, end: Date(), options: .strictStartDate)
         
-        let query = HKStatisticsQuery(quantityType: stepType, quantitySamplePredicate: predicate, options: .cumulativeSum) { _, result, error in
+        let query = HKSampleQuery(sampleType: workoutType, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, error in
             if let error = error {
-                print("歩数取得エラー: \(error.localizedDescription)")
+                print("筋トレデータ取得エラー: \(error.localizedDescription)")
                 return
             }
             
-            guard let result = result, let sum = result.sumQuantity() else {
-                print("歩数データが見つかりません")
-                return
-            }
+            let strengthWorkouts = samples?.compactMap { $0 as? HKWorkout }
+                .filter { $0.workoutActivityType == .traditionalStrengthTraining } ?? []
             
-            let steps = Int(sum.doubleValue(for: HKUnit.count()))
-            print("取得した歩数: \(steps)")
+            let workoutCount = strengthWorkouts.count
+            print("取得した筋トレ回数: \(workoutCount)")
             
             DispatchQueue.main.async {
-                self.stepCount = steps
+                self.weeklyWorkoutCount = workoutCount
             }
         }
         
@@ -250,28 +358,28 @@ class HealthKitManager: ObservableObject {
         healthStore.execute(query)
     }
     
-    private func fetchDistance() {
-        let distanceType = HKQuantityType.quantityType(forIdentifier: .distanceWalkingRunning)!
-        // 過去7日間のデータを取得
+    private func fetchAverageWorkoutDuration() {
+        let workoutType = HKObjectType.workoutType()
+        // 過去7日間の筋トレデータを取得
         let startDate = Calendar.current.date(byAdding: .day, value: -7, to: Date())!
         let predicate = HKQuery.predicateForSamples(withStart: startDate, end: Date(), options: .strictStartDate)
         
-        let query = HKStatisticsQuery(quantityType: distanceType, quantitySamplePredicate: predicate, options: .cumulativeSum) { _, result, error in
+        let query = HKSampleQuery(sampleType: workoutType, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, error in
             if let error = error {
-                print("距離取得エラー: \(error.localizedDescription)")
+                print("筋トレ時間取得エラー: \(error.localizedDescription)")
                 return
             }
             
-            guard let result = result, let sum = result.sumQuantity() else {
-                print("距離データが見つかりません")
-                return
-            }
+            let strengthWorkouts = samples?.compactMap { $0 as? HKWorkout }
+                .filter { $0.workoutActivityType == .traditionalStrengthTraining } ?? []
             
-            let distance = sum.doubleValue(for: HKUnit.meter())
-            print("取得した距離: \(distance)")
+            let totalDuration = strengthWorkouts.reduce(0) { $0 + $1.duration }
+            let averageDuration = strengthWorkouts.isEmpty ? 0 : totalDuration / Double(strengthWorkouts.count)
+            
+            print("取得した平均筋トレ時間: \(averageDuration)秒")
             
             DispatchQueue.main.async {
-                self.distance = distance
+                self.averageWorkoutDuration = averageDuration
             }
         }
         
@@ -336,6 +444,30 @@ class HealthKitManager: ObservableObject {
         let endDate = Date()
         let startDate = Calendar.current.date(byAdding: .day, value: -30, to: endDate) ?? endDate
         return await fetchWorkouts(from: startDate, to: endDate)
+    }
+    
+    /// 最近の筋トレワークアウトを取得
+    func fetchRecentStrengthWorkouts(completion: @escaping ([HKWorkout]) -> Void) {
+        let workoutType = HKObjectType.workoutType()
+        let startDate = Calendar.current.date(byAdding: .day, value: -30, to: Date())!
+        let predicate = HKQuery.predicateForSamples(withStart: startDate, end: Date(), options: .strictStartDate)
+        let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
+        
+        let query = HKSampleQuery(sampleType: workoutType, predicate: predicate, limit: 5, sortDescriptors: [sortDescriptor]) { _, samples, error in
+            if let error = error {
+                print("最近の筋トレ取得エラー: \(error.localizedDescription)")
+                completion([])
+                return
+            }
+            
+            let strengthWorkouts = samples?.compactMap { $0 as? HKWorkout }
+                .filter { $0.workoutActivityType == .traditionalStrengthTraining } ?? []
+            
+            print("取得した最近の筋トレ数: \(strengthWorkouts.count)")
+            completion(strengthWorkouts)
+        }
+        
+        healthStore.execute(query)
     }
     
     // テスト用のダミーデータを追加
