@@ -224,7 +224,8 @@ class BodyCompositionManager: ObservableObject {
                 muscleMass: nil,
                 basalMetabolicRate: nil,
                 bmi: nil,
-                visceralFatLevel: nil
+                visceralFatLevel: nil,
+                bodyWaterPercentage: nil
             ))
         }
         
@@ -245,7 +246,8 @@ class BodyCompositionManager: ObservableObject {
                     muscleMass: weightHistory[index].muscleMass,
                     basalMetabolicRate: weightHistory[index].basalMetabolicRate,
                     bmi: weightHistory[index].bmi,
-                    visceralFatLevel: weightHistory[index].visceralFatLevel
+                    visceralFatLevel: weightHistory[index].visceralFatLevel,
+                    bodyWaterPercentage: weightHistory[index].bodyWaterPercentage
                 )
             }
         }
@@ -265,7 +267,8 @@ class BodyCompositionManager: ObservableObject {
                     muscleMass: muscle,
                     basalMetabolicRate: weightHistory[index].basalMetabolicRate,
                     bmi: weightHistory[index].bmi,
-                    visceralFatLevel: weightHistory[index].visceralFatLevel
+                    visceralFatLevel: weightHistory[index].visceralFatLevel,
+                    bodyWaterPercentage: weightHistory[index].bodyWaterPercentage
                 )
             }
         }
@@ -295,6 +298,19 @@ class BodyCompositionManager: ObservableObject {
             return 0
         }
         return lastBodyFat - firstBodyFat
+    }
+    
+    func getTimeSinceLastUpdate() -> TimeInterval {
+        guard let lastUpdate = lastUpdateDate else { return 0 }
+        return Date().timeIntervalSince(lastUpdate)
+    }
+    
+    func getDaysSinceLastUpdate() -> TimeInterval {
+        return getTimeSinceLastUpdate() / (24 * 60 * 60)
+    }
+    
+    func getWeeksSinceLastUpdate() -> TimeInterval {
+        return getTimeSinceLastUpdate() / (7 * 24 * 60 * 60)
     }
     
     func getBMIStatus() -> BMIStatus {
@@ -420,6 +436,7 @@ struct BodyCompositionData: Identifiable {
     let basalMetabolicRate: Double?
     let bmi: Double?
     let visceralFatLevel: Double?
+    let bodyWaterPercentage: Double?
 }
 
 enum BMIStatus {

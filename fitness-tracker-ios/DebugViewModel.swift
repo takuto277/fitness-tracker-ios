@@ -151,7 +151,7 @@ class DebugViewModel: ObservableObject {
     private func calculateSummary() {
         // 筋トレデータの集計
         workoutCount = workouts.count
-        totalWorkoutDuration = workouts.reduce(0) { $0 + $1.duration }
+        totalWorkoutDuration = workouts.reduce(0) { $0 + TimeInterval($1.duration) }
         
         // カロリーデータの集計
         totalCalories = calorieData.reduce(0) { $0 + $1.quantity.doubleValue(for: .kilocalorie()) }

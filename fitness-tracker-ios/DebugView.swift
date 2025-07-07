@@ -343,7 +343,7 @@ struct WorkoutDetailCard: View {
                     Text("時間")
                         .font(.system(size: 10, weight: .medium))
                         .foregroundColor(.white.opacity(0.6))
-                    Text("\(Int(workout.duration / 60))分")
+                    Text("\(Int(TimeInterval(workout.duration) / 60))分")
                         .font(.system(size: 12, weight: .bold))
                         .foregroundColor(.white)
                 }

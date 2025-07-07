@@ -48,10 +48,10 @@ struct ContentView: View {
                     Text("栄養")
                 }
             
-            // 筋トレ分析
-            AdvancedAnalysisView()
+            // フィットネス分析
+            FitnessAnalysisView()
                 .tabItem {
-                    Image(systemName: "chart.bar.fill")
+                    Image(systemName: "chart.line.uptrend.xyaxis")
                     Text("分析")
                 }
             

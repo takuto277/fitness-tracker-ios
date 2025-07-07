@@ -395,7 +395,7 @@ class HealthKitManager: ObservableObject {
             let strengthWorkouts = samples?.compactMap { $0 as? HKWorkout }
                 .filter { $0.workoutActivityType == .traditionalStrengthTraining } ?? []
             
-            let totalDuration = strengthWorkouts.reduce(0) { $0 + $1.duration }
+            let totalDuration = strengthWorkouts.reduce(0) { $0 + TimeInterval($1.duration) }
             let averageDuration = strengthWorkouts.isEmpty ? 0 : totalDuration / Double(strengthWorkouts.count)
             
             print("取得した平均筋トレ時間: \(averageDuration)秒")

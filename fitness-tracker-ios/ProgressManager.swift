@@ -169,7 +169,7 @@ class ProgressManager: ObservableObject {
             
             if let workouts = samples as? [HKWorkout] {
                 for workout in workouts {
-                    totalDuration += workout.duration
+                    totalDuration += TimeInterval(workout.duration)
                     if let calories = workout.totalEnergyBurned?.doubleValue(for: HKUnit.kilocalorie()) {
                         totalCalories += calories
                     }

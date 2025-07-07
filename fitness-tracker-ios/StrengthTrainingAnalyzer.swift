@@ -72,7 +72,7 @@ class StrengthTrainingAnalyzer: ObservableObject {
         
         guard !strengthWorkouts.isEmpty else { return 0 }
         
-        let totalDuration = strengthWorkouts.reduce(0) { $0 + $1.duration }
+        let totalDuration = strengthWorkouts.reduce(0) { $0 + TimeInterval($1.duration) }
         return totalDuration / Double(strengthWorkouts.count)
     }
     

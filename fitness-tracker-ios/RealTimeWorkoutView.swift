@@ -456,7 +456,7 @@ struct RecentWorkoutCard: View {
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.white.opacity(0.7))
                 
-                Text("\(Int(workout.duration / 60))分 • \(Int(workout.totalEnergyBurned?.doubleValue(for: .kilocalorie()) ?? 0))kcal")
+                Text("\(Int(TimeInterval(workout.duration) / 60))分 • \(Int(workout.totalEnergyBurned?.doubleValue(for: .kilocalorie()) ?? 0))kcal")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.white.opacity(0.6))
             }
@@ -464,7 +464,7 @@ struct RecentWorkoutCard: View {
             Spacer()
             
             VStack(alignment: .trailing, spacing: 4) {
-                Text("\(Int(workout.duration / 60))")
+                Text("\(Int(TimeInterval(workout.duration) / 60))")
                     .font(.system(size: 18, weight: .bold))
                     .foregroundColor(.orange)
                 
