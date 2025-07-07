@@ -567,6 +567,248 @@ class HealthKitManager: ObservableObject {
             }
         }
     }
+    
+    // MARK: - Nutrition Data Fetching
+    
+    /// 指定期間の栄養データを取得
+    func fetchNutritionData(from startDate: Date, to endDate: Date, completion: @escaping ([NutritionData]) -> Void) {
+        let energyType = HKQuantityType.quantityType(forIdentifier: .dietaryEnergyConsumed)!
+        let proteinType = HKQuantityType.quantityType(forIdentifier: .dietaryProtein)!
+        let carbsType = HKQuantityType.quantityType(forIdentifier: .dietaryCarbohydrates)!
+        let fatType = HKQuantityType.quantityType(forIdentifier: .dietaryFatTotal)!
+        let waterType = HKQuantityType.quantityType(forIdentifier: .dietaryWater)!
+        
+        let predicate = HKQuery.predicateForSamples(withStart: startDate, end: endDate, options: .strictStartDate)
+        
+        // 各栄養素のデータを取得
+        let group = DispatchGroup()
+        var energyData: [HKQuantitySample] = []
+        var proteinData: [HKQuantitySample] = []
+        var carbsData: [HKQuantitySample] = []
+        var fatData: [HKQuantitySample] = []
+        var waterData: [HKQuantitySample] = []
+        
+        // カロリーデータ取得
+        group.enter()
+        let energyQuery = HKSampleQuery(sampleType: energyType, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, _ in
+            energyData = samples as? [HKQuantitySample] ?? []
+            group.leave()
+        }
+        healthStore.execute(energyQuery)
+        
+        // タンパク質データ取得
+        group.enter()
+        let proteinQuery = HKSampleQuery(sampleType: proteinType, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, _ in
+            proteinData = samples as? [HKQuantitySample] ?? []
+            group.leave()
+        }
+        healthStore.execute(proteinQuery)
+        
+        // 炭水化物データ取得
+        group.enter()
+        let carbsQuery = HKSampleQuery(sampleType: carbsType, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, _ in
+            carbsData = samples as? [HKQuantitySample] ?? []
+            group.leave()
+        }
+        healthStore.execute(carbsQuery)
+        
+        // 脂質データ取得
+        group.enter()
+        let fatQuery = HKSampleQuery(sampleType: fatType, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, _ in
+            fatData = samples as? [HKQuantitySample] ?? []
+            group.leave()
+        }
+        healthStore.execute(fatQuery)
+        
+        // 水分データ取得
+        group.enter()
+        let waterQuery = HKSampleQuery(sampleType: waterType, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, _ in
+            waterData = samples as? [HKQuantitySample] ?? []
+            group.leave()
+        }
+        healthStore.execute(waterQuery)
+        
+        group.notify(queue: .main) {
+            // 日付ごとにデータを集約
+            var nutritionDataByDate: [Date: NutritionData] = [:]
+            
+            // カロリーデータを処理
+            for sample in energyData {
+                let date = Calendar.current.startOfDay(for: sample.startDate)
+                let calories = sample.quantity.doubleValue(for: HKUnit.kilocalorie())
+                
+                if let existing = nutritionDataByDate[date] {
+                    nutritionDataByDate[date] = NutritionData(
+                        date: date,
+                        calories: existing.calories + calories,
+                        protein: existing.protein,
+                        carbs: existing.carbs,
+                        fat: existing.fat,
+                        water: existing.water
+                    )
+                } else {
+                    nutritionDataByDate[date] = NutritionData(
+                        date: date,
+                        calories: calories,
+                        protein: 0,
+                        carbs: 0,
+                        fat: 0,
+                        water: 0
+                    )
+                }
+            }
+            
+            // タンパク質データを処理
+            for sample in proteinData {
+                let date = Calendar.current.startOfDay(for: sample.startDate)
+                let protein = sample.quantity.doubleValue(for: HKUnit.gram())
+                
+                if let existing = nutritionDataByDate[date] {
+                    nutritionDataByDate[date] = NutritionData(
+                        date: date,
+                        calories: existing.calories,
+                        protein: existing.protein + protein,
+                        carbs: existing.carbs,
+                        fat: existing.fat,
+                        water: existing.water
+                    )
+                }
+            }
+            
+            // 炭水化物データを処理
+            for sample in carbsData {
+                let date = Calendar.current.startOfDay(for: sample.startDate)
+                let carbs = sample.quantity.doubleValue(for: HKUnit.gram())
+                
+                if let existing = nutritionDataByDate[date] {
+                    nutritionDataByDate[date] = NutritionData(
+                        date: date,
+                        calories: existing.calories,
+                        protein: existing.protein,
+                        carbs: existing.carbs + carbs,
+                        fat: existing.fat,
+                        water: existing.water
+                    )
+                }
+            }
+            
+            // 脂質データを処理
+            for sample in fatData {
+                let date = Calendar.current.startOfDay(for: sample.startDate)
+                let fat = sample.quantity.doubleValue(for: HKUnit.gram())
+                
+                if let existing = nutritionDataByDate[date] {
+                    nutritionDataByDate[date] = NutritionData(
+                        date: date,
+                        calories: existing.calories,
+                        protein: existing.protein,
+                        carbs: existing.carbs,
+                        fat: existing.fat + fat,
+                        water: existing.water
+                    )
+                }
+            }
+            
+            // 水分データを処理
+            for sample in waterData {
+                let date = Calendar.current.startOfDay(for: sample.startDate)
+                let water = sample.quantity.doubleValue(for: HKUnit.fluidOunceUS())
+                
+                if let existing = nutritionDataByDate[date] {
+                    nutritionDataByDate[date] = NutritionData(
+                        date: date,
+                        calories: existing.calories,
+                        protein: existing.protein,
+                        carbs: existing.carbs,
+                        fat: existing.fat,
+                        water: existing.water + water
+                    )
+                }
+            }
+            
+            let result = Array(nutritionDataByDate.values).sorted { $0.date < $1.date }
+            completion(result)
+        }
+    }
+    
+    // MARK: - Body Composition Data Fetching
+    
+    /// 指定期間の体組成データを取得
+    func fetchBodyCompositionData(from startDate: Date, to endDate: Date, completion: @escaping ([FitnessBodyCompositionData]) -> Void) {
+        let weightType = HKQuantityType.quantityType(forIdentifier: .bodyMass)!
+        let bodyFatType = HKQuantityType.quantityType(forIdentifier: .bodyFatPercentage)!
+        
+        let predicate = HKQuery.predicateForSamples(withStart: startDate, end: endDate, options: .strictStartDate)
+        
+        let group = DispatchGroup()
+        var weightData: [HKQuantitySample] = []
+        var bodyFatData: [HKQuantitySample] = []
+        
+        // 体重データ取得
+        group.enter()
+        let weightQuery = HKSampleQuery(sampleType: weightType, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, _ in
+            weightData = samples as? [HKQuantitySample] ?? []
+            group.leave()
+        }
+        healthStore.execute(weightQuery)
+        
+        // 体脂肪率データ取得
+        group.enter()
+        let bodyFatQuery = HKSampleQuery(sampleType: bodyFatType, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, _ in
+            bodyFatData = samples as? [HKQuantitySample] ?? []
+            group.leave()
+        }
+        healthStore.execute(bodyFatQuery)
+        
+        group.notify(queue: .main) {
+            var bodyCompositionByDate: [Date: FitnessBodyCompositionData] = [:]
+            
+            // 体重データを処理
+            for sample in weightData {
+                let date = Calendar.current.startOfDay(for: sample.startDate)
+                let weight = sample.quantity.doubleValue(for: HKUnit.gramUnit(with: .kilo))
+                
+                bodyCompositionByDate[date] = FitnessBodyCompositionData(
+                    date: date,
+                    weight: weight,
+                    bodyFatPercentage: 0,
+                    muscleMass: 0,
+                    bodyWaterPercentage: 60.0 // デフォルト値
+                )
+            }
+            
+            // 体脂肪率データを処理
+            for sample in bodyFatData {
+                let date = Calendar.current.startOfDay(for: sample.startDate)
+                let bodyFat = sample.quantity.doubleValue(for: HKUnit.percent())
+                
+                if let existing = bodyCompositionByDate[date] {
+                    bodyCompositionByDate[date] = FitnessBodyCompositionData(
+                        date: date,
+                        weight: existing.weight,
+                        bodyFatPercentage: bodyFat,
+                        muscleMass: existing.muscleMass,
+                        bodyWaterPercentage: existing.bodyWaterPercentage
+                    )
+                }
+            }
+            
+            // 筋肉量を計算（体重から体脂肪率を引いた概算）
+            for (date, data) in bodyCompositionByDate {
+                let muscleMass = data.weight * (1 - data.bodyFatPercentage / 100)
+                bodyCompositionByDate[date] = FitnessBodyCompositionData(
+                    date: date,
+                    weight: data.weight,
+                    bodyFatPercentage: data.bodyFatPercentage,
+                    muscleMass: muscleMass,
+                    bodyWaterPercentage: data.bodyWaterPercentage
+                )
+            }
+            
+            let result = Array(bodyCompositionByDate.values).sorted { $0.date < $1.date }
+            completion(result)
+        }
+    }
 }
 
 // Date拡張

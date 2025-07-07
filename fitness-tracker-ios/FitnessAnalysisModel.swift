@@ -65,12 +65,31 @@ class FitnessAnalysisCalculator: ObservableObject {
     // MARK: - Data Fetching
     
     func fetchAnalysisData() {
-        fetchWorkoutData()
-        fetchNutritionData()
-        fetchBodyCompositionData()
+        // すべてのデータを並行して取得
+        let group = DispatchGroup()
+        
+        group.enter()
+        fetchWorkoutData {
+            group.leave()
+        }
+        
+        group.enter()
+        fetchNutritionData {
+            group.leave()
+        }
+        
+        group.enter()
+        fetchBodyCompositionData {
+            group.leave()
+        }
+        
+        // すべてのデータ取得完了後に分析を実行
+        group.notify(queue: .main) {
+            self.calculateFitnessData()
+        }
     }
     
-    private func fetchWorkoutData() {
+    private func fetchWorkoutData(completion: @escaping () -> Void) {
         // 過去90日間のワークアウトデータを取得
         let startDate = Calendar.current.date(byAdding: .day, value: -90, to: Date())!
         
@@ -87,21 +106,33 @@ class FitnessAnalysisCalculator: ObservableObject {
                         intensity: intensity
                     )
                 }
-                self.calculateFitnessData()
+                completion()
             }
         }
     }
     
-    private func fetchNutritionData() {
-        // 実際の栄養データの取得（現在はサンプルデータを使用）
-        // TODO: HealthKitから栄養データを取得する実装を追加
-        nutritionData = generateSampleNutritionData()
+    private func fetchNutritionData(completion: @escaping () -> Void) {
+        // HealthKitから栄養データを取得
+        let startDate = Calendar.current.date(byAdding: .day, value: -90, to: Date())!
+        
+        healthKitManager.fetchNutritionData(from: startDate, to: Date()) { nutritionData in
+            DispatchQueue.main.async {
+                self.nutritionData = nutritionData
+                completion()
+            }
+        }
     }
     
-    private func fetchBodyCompositionData() {
-        // 実際の体組成データの取得（現在はサンプルデータを使用）
-        // TODO: HealthKitから体組成データを取得する実装を追加
-        bodyCompositionData = generateSampleBodyCompositionData()
+    private func fetchBodyCompositionData(completion: @escaping () -> Void) {
+        // HealthKitから体組成データを取得
+        let startDate = Calendar.current.date(byAdding: .day, value: -90, to: Date())!
+        
+        healthKitManager.fetchBodyCompositionData(from: startDate, to: Date()) { bodyCompositionData in
+            DispatchQueue.main.async {
+                self.bodyCompositionData = bodyCompositionData
+                completion()
+            }
+        }
     }
     
     // MARK: - Calculations
@@ -126,41 +157,47 @@ class FitnessAnalysisCalculator: ObservableObject {
     private func calculateFitnessData() {
         var dataPoints: [FitnessDataPoint] = []
         
-        // 過去90日間のデータポイントを生成（今日を基準）
-        let calendar = Calendar.current
-        let today = Date()
+        // 実際のデータがある日のみを処理
+        let allDates = Set(
+            nutritionData.map { Calendar.current.startOfDay(for: $0.date) } +
+            workoutData.map { Calendar.current.startOfDay(for: $0.date) } +
+            bodyCompositionData.map { Calendar.current.startOfDay(for: $0.date) }
+        )
         
-        for i in 0..<90 {
-            guard let date = calendar.date(byAdding: .day, value: -i, to: today) else { continue }
-            
+        let sortedDates = allDates.sorted()
+        
+        for date in sortedDates {
             let caloriesIn = getCaloriesIn(for: date)
             let caloriesOut = getCaloriesOut(for: date)
             let bodyFatPercentage = getBodyFatPercentage(for: date)
             let workoutIntensity = getWorkoutIntensity(for: date)
             
-            let muscleGainEfficiency = calculateMuscleGainEfficiency(
-                caloriesIn: caloriesIn,
-                caloriesOut: caloriesOut,
-                workoutIntensity: workoutIntensity
-            )
-            
-            let fatLossEfficiency = calculateFatLossEfficiency(
-                caloriesIn: caloriesIn,
-                caloriesOut: caloriesOut,
-                workoutIntensity: workoutIntensity
-            )
-            
-            let dataPoint = FitnessDataPoint(
-                date: date,
-                caloriesIn: caloriesIn,
-                caloriesOut: caloriesOut,
-                bodyFatPercentage: bodyFatPercentage,
-                workoutIntensity: workoutIntensity,
-                muscleGainEfficiency: muscleGainEfficiency,
-                fatLossEfficiency: fatLossEfficiency
-            )
-            
-            dataPoints.append(dataPoint)
+            // データが存在する場合のみデータポイントを作成
+            if caloriesIn > 0 || caloriesOut > 0 || bodyFatPercentage > 0 || workoutIntensity > 0 {
+                let muscleGainEfficiency = calculateMuscleGainEfficiency(
+                    caloriesIn: caloriesIn,
+                    caloriesOut: caloriesOut,
+                    workoutIntensity: workoutIntensity
+                )
+                
+                let fatLossEfficiency = calculateFatLossEfficiency(
+                    caloriesIn: caloriesIn,
+                    caloriesOut: caloriesOut,
+                    workoutIntensity: workoutIntensity
+                )
+                
+                let dataPoint = FitnessDataPoint(
+                    date: date,
+                    caloriesIn: caloriesIn,
+                    caloriesOut: caloriesOut,
+                    bodyFatPercentage: bodyFatPercentage,
+                    workoutIntensity: workoutIntensity,
+                    muscleGainEfficiency: muscleGainEfficiency,
+                    fatLossEfficiency: fatLossEfficiency
+                )
+                
+                dataPoints.append(dataPoint)
+            }
         }
         
         // 日付順にソート（古い順）
@@ -171,7 +208,7 @@ class FitnessAnalysisCalculator: ObservableObject {
     private func getCaloriesIn(for date: Date) -> Double {
         // 栄養データから該当日のカロリー摂取量を取得
         let dayData = nutritionData.filter { Calendar.current.isDate($0.date, inSameDayAs: date) }
-        return dayData.first?.calories ?? 2000.0
+        return dayData.first?.calories ?? 0.0
     }
     
     private func getCaloriesOut(for date: Date) -> Double {
@@ -183,7 +220,7 @@ class FitnessAnalysisCalculator: ObservableObject {
     private func getBodyFatPercentage(for date: Date) -> Double {
         // 体組成データから該当日の体脂肪率を取得
         let dayData = bodyCompositionData.filter { Calendar.current.isDate($0.date, inSameDayAs: date) }
-        return dayData.first?.bodyFatPercentage ?? 20.0
+        return dayData.first?.bodyFatPercentage ?? 0.0
     }
     
     private func getWorkoutIntensity(for date: Date) -> Double {
@@ -274,53 +311,5 @@ class FitnessAnalysisCalculator: ObservableObject {
             fatLossPrediction: fatLossPrediction.isFinite ? fatLossPrediction : 0.0,
             efficiencyScore: efficiencyScore.isFinite ? efficiencyScore : 0.0
         )
-    }
-    
-    // MARK: - Sample Data Generation
-    
-    private func generateSampleNutritionData() -> [NutritionData] {
-        var data: [NutritionData] = []
-        let calendar = Calendar.current
-        let today = Date()
-        
-        for i in 0..<90 {
-            guard let date = calendar.date(byAdding: .day, value: -i, to: today) else { continue }
-            
-            // より現実的なカロリー摂取量（1800-2500kcal）
-            let calories = Double.random(in: 1800...2500)
-            data.append(NutritionData(
-                date: date,
-                calories: calories,
-                protein: calories * 0.25 / 4, // 25%をタンパク質
-                carbs: calories * 0.45 / 4,   // 45%を炭水化物
-                fat: calories * 0.30 / 9,     // 30%を脂質
-                water: Double.random(in: 2000...3000)
-            ))
-        }
-        return data
-    }
-    
-    private func generateSampleBodyCompositionData() -> [FitnessBodyCompositionData] {
-        var data: [FitnessBodyCompositionData] = []
-        let calendar = Calendar.current
-        let today = Date()
-        var currentBodyFat = 20.0
-        
-        for i in 0..<90 {
-            guard let date = calendar.date(byAdding: .day, value: -i, to: today) else { continue }
-            
-            // 体脂肪率を徐々に減少させる（筋トレ効果を模擬）
-            currentBodyFat += Double.random(in: -0.1...0.05)
-            currentBodyFat = max(15.0, min(25.0, currentBodyFat))
-            
-            data.append(FitnessBodyCompositionData(
-                date: date,
-                weight: 70.0 + Double.random(in: -0.5...0.5),
-                bodyFatPercentage: currentBodyFat,
-                muscleMass: 70.0 * (1 - currentBodyFat / 100) + Double.random(in: -0.2...0.2),
-                bodyWaterPercentage: 60.0 + Double.random(in: -1...1)
-            ))
-        }
-        return data
     }
 } 
