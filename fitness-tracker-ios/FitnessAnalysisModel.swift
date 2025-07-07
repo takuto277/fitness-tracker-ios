@@ -71,8 +71,8 @@ class FitnessAnalysisCalculator: ObservableObject {
     }
     
     private func fetchWorkoutData() {
-        // 過去30日間のワークアウトデータを取得
-        let startDate = Calendar.current.date(byAdding: .day, value: -30, to: Date())!
+        // 過去90日間のワークアウトデータを取得
+        let startDate = Calendar.current.date(byAdding: .day, value: -90, to: Date())!
         
         healthKitManager.fetchRecentStrengthWorkouts { workouts in
             DispatchQueue.main.async {
@@ -93,14 +93,14 @@ class FitnessAnalysisCalculator: ObservableObject {
     }
     
     private func fetchNutritionData() {
-        // 栄養データの取得（実装が必要）
-        // 現在はサンプルデータを使用
+        // 実際の栄養データの取得（現在はサンプルデータを使用）
+        // TODO: HealthKitから栄養データを取得する実装を追加
         nutritionData = generateSampleNutritionData()
     }
     
     private func fetchBodyCompositionData() {
-        // 体組成データの取得（実装が必要）
-        // 現在はサンプルデータを使用
+        // 実際の体組成データの取得（現在はサンプルデータを使用）
+        // TODO: HealthKitから体組成データを取得する実装を追加
         bodyCompositionData = generateSampleBodyCompositionData()
     }
     
@@ -126,9 +126,12 @@ class FitnessAnalysisCalculator: ObservableObject {
     private func calculateFitnessData() {
         var dataPoints: [FitnessDataPoint] = []
         
-        // 過去30日間のデータポイントを生成
-        for i in 0..<30 {
-            let date = Calendar.current.date(byAdding: .day, value: -i, to: Date())!
+        // 過去90日間のデータポイントを生成（今日を基準）
+        let calendar = Calendar.current
+        let today = Date()
+        
+        for i in 0..<90 {
+            guard let date = calendar.date(byAdding: .day, value: -i, to: today) else { continue }
             
             let caloriesIn = getCaloriesIn(for: date)
             let caloriesOut = getCaloriesOut(for: date)
@@ -160,7 +163,8 @@ class FitnessAnalysisCalculator: ObservableObject {
             dataPoints.append(dataPoint)
         }
         
-        fitnessData = dataPoints.reversed()
+        // 日付順にソート（古い順）
+        fitnessData = dataPoints.sorted { $0.date < $1.date }
         performAnalysis()
     }
     
@@ -276,8 +280,13 @@ class FitnessAnalysisCalculator: ObservableObject {
     
     private func generateSampleNutritionData() -> [NutritionData] {
         var data: [NutritionData] = []
-        for i in 0..<30 {
-            let date = Calendar.current.date(byAdding: .day, value: -i, to: Date())!
+        let calendar = Calendar.current
+        let today = Date()
+        
+        for i in 0..<90 {
+            guard let date = calendar.date(byAdding: .day, value: -i, to: today) else { continue }
+            
+            // より現実的なカロリー摂取量（1800-2500kcal）
             let calories = Double.random(in: 1800...2500)
             data.append(NutritionData(
                 date: date,
@@ -293,19 +302,23 @@ class FitnessAnalysisCalculator: ObservableObject {
     
     private func generateSampleBodyCompositionData() -> [FitnessBodyCompositionData] {
         var data: [FitnessBodyCompositionData] = []
+        let calendar = Calendar.current
+        let today = Date()
         var currentBodyFat = 20.0
-        for i in 0..<30 {
-            let date = Calendar.current.date(byAdding: .day, value: -i, to: Date())!
-            // 体脂肪率を徐々に減少させる
-            currentBodyFat += Double.random(in: -0.2...0.1)
+        
+        for i in 0..<90 {
+            guard let date = calendar.date(byAdding: .day, value: -i, to: today) else { continue }
+            
+            // 体脂肪率を徐々に減少させる（筋トレ効果を模擬）
+            currentBodyFat += Double.random(in: -0.1...0.05)
             currentBodyFat = max(15.0, min(25.0, currentBodyFat))
             
             data.append(FitnessBodyCompositionData(
                 date: date,
-                weight: 70.0 + Double.random(in: -1...1),
+                weight: 70.0 + Double.random(in: -0.5...0.5),
                 bodyFatPercentage: currentBodyFat,
-                muscleMass: 70.0 * (1 - currentBodyFat / 100) + Double.random(in: -0.5...0.5),
-                bodyWaterPercentage: 60.0 + Double.random(in: -2...2)
+                muscleMass: 70.0 * (1 - currentBodyFat / 100) + Double.random(in: -0.2...0.2),
+                bodyWaterPercentage: 60.0 + Double.random(in: -1...1)
             ))
         }
         return data

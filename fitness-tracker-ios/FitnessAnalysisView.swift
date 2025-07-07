@@ -207,138 +207,212 @@ struct FitnessAnalysisView: View {
     // MARK: - Charts
     
     private var efficiencyChart: some View {
-        Chart {
-            ForEach(filteredData) { dataPoint in
-                LineMark(
-                    x: .value("日付", dataPoint.date),
-                    y: .value("筋肉増加効率", dataPoint.muscleGainEfficiency)
-                )
-                .foregroundStyle(.green)
-                .lineStyle(StrokeStyle(lineWidth: 3))
-                
-                LineMark(
-                    x: .value("日付", dataPoint.date),
-                    y: .value("脂肪減少効率", dataPoint.fatLossEfficiency)
-                )
-                .foregroundStyle(.red)
-                .lineStyle(StrokeStyle(lineWidth: 3))
+        VStack(spacing: 10) {
+            Chart {
+                ForEach(filteredData) { dataPoint in
+                    LineMark(
+                        x: .value("日付", dataPoint.date),
+                        y: .value("筋肉増加効率", dataPoint.muscleGainEfficiency)
+                    )
+                    .foregroundStyle(.green)
+                    .lineStyle(StrokeStyle(lineWidth: 3))
+                    
+                    LineMark(
+                        x: .value("日付", dataPoint.date),
+                        y: .value("脂肪減少効率", dataPoint.fatLossEfficiency)
+                    )
+                    .foregroundStyle(.red)
+                    .lineStyle(StrokeStyle(lineWidth: 3))
+                }
+            }
+            .frame(height: 250)
+            .chartYScale(domain: 0...1)
+            .chartYAxis {
+                AxisMarks(position: .leading) {
+                    AxisGridLine()
+                        .foregroundStyle(.white.opacity(0.2))
+                    AxisTick()
+                        .foregroundStyle(.white.opacity(0.5))
+                    AxisValueLabel()
+                        .foregroundStyle(.white)
+                }
+            }
+            .chartXAxis {
+                AxisMarks(values: .stride(by: selectedTimeRange == .week ? .day : .weekOfYear)) { value in
+                    AxisGridLine()
+                        .foregroundStyle(.white.opacity(0.2))
+                    AxisTick()
+                        .foregroundStyle(.white.opacity(0.5))
+                }
+            }
+            
+            // 日付ラベル
+            dateLabelsView
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.white.opacity(0.05))
+        )
+    }
+    
+    // 日付ラベル用のView
+    private var dateLabelsView: some View {
+        let step = selectedTimeRange == .week ? 1 : 3
+        let formatter = DateFormatter()
+        formatter.dateFormat = "M/d"
+        
+        return HStack {
+            ForEach(Array(filteredData.indices.enumerated()), id: \.offset) { _, index in
+                if index % step == 0 {
+                    Text(formatter.string(from: filteredData[index].date))
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.white.opacity(0.7))
+                    
+                    if index < filteredData.count - step {
+                        Spacer()
+                    }
+                }
             }
         }
-        .frame(height: 300)
-        .chartYScale(domain: 0...1)
-        .chartYAxis {
-            AxisMarks(position: .leading) {
-                AxisGridLine()
-                AxisTick()
-                AxisValueLabel()
-            }
-        }
-        .chartXAxis {
-            AxisMarks(values: .stride(by: .day)) { value in
-                AxisGridLine()
-                AxisTick()
-                AxisValueLabel(format: .dateTime.day())
-            }
-        }
+        .padding(.horizontal, 20)
     }
     
     private var caloriesChart: some View {
-        Chart {
-            ForEach(filteredData) { dataPoint in
-                LineMark(
-                    x: .value("日付", dataPoint.date),
-                    y: .value("摂取カロリー", dataPoint.caloriesIn)
-                )
-                .foregroundStyle(.blue)
-                .lineStyle(StrokeStyle(lineWidth: 3))
-                
-                LineMark(
-                    x: .value("日付", dataPoint.date),
-                    y: .value("消費カロリー", dataPoint.caloriesOut)
-                )
-                .foregroundStyle(.orange)
-                .lineStyle(StrokeStyle(lineWidth: 3))
+        VStack(spacing: 10) {
+            Chart {
+                ForEach(filteredData) { dataPoint in
+                    LineMark(
+                        x: .value("日付", dataPoint.date),
+                        y: .value("摂取カロリー", dataPoint.caloriesIn)
+                    )
+                    .foregroundStyle(.blue)
+                    .lineStyle(StrokeStyle(lineWidth: 3))
+                    
+                    LineMark(
+                        x: .value("日付", dataPoint.date),
+                        y: .value("消費カロリー", dataPoint.caloriesOut)
+                    )
+                    .foregroundStyle(.orange)
+                    .lineStyle(StrokeStyle(lineWidth: 3))
+                }
             }
-        }
-        .frame(height: 300)
-        .chartYScale(domain: 0...3000)
-        .chartYAxis {
-            AxisMarks(position: .leading) {
-                AxisGridLine()
-                AxisTick()
-                AxisValueLabel()
+            .frame(height: 250)
+            .chartYScale(domain: 0...3000)
+            .chartYAxis {
+                AxisMarks(position: .leading) {
+                    AxisGridLine()
+                        .foregroundStyle(.white.opacity(0.2))
+                    AxisTick()
+                        .foregroundStyle(.white.opacity(0.5))
+                    AxisValueLabel()
+                        .foregroundStyle(.white)
+                }
             }
-        }
-        .chartXAxis {
-            AxisMarks(values: .stride(by: .day)) { value in
-                AxisGridLine()
-                AxisTick()
-                AxisValueLabel(format: .dateTime.day())
+            .chartXAxis {
+                AxisMarks(values: .stride(by: selectedTimeRange == .week ? .day : .weekOfYear)) { value in
+                    AxisGridLine()
+                        .foregroundStyle(.white.opacity(0.2))
+                    AxisTick()
+                        .foregroundStyle(.white.opacity(0.5))
+                }
             }
+            
+            // 日付ラベル
+            dateLabelsView
         }
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.white.opacity(0.05))
+        )
     }
     
     private var bodyCompositionChart: some View {
-        Chart {
-            ForEach(filteredData) { dataPoint in
-                LineMark(
-                    x: .value("日付", dataPoint.date),
-                    y: .value("体脂肪率", dataPoint.bodyFatPercentage)
-                )
-                .foregroundStyle(.red)
-                .lineStyle(StrokeStyle(lineWidth: 3))
+        VStack(spacing: 10) {
+            Chart {
+                ForEach(filteredData) { dataPoint in
+                    LineMark(
+                        x: .value("日付", dataPoint.date),
+                        y: .value("体脂肪率", dataPoint.bodyFatPercentage)
+                    )
+                    .foregroundStyle(.red)
+                    .lineStyle(StrokeStyle(lineWidth: 3))
+                }
             }
-        }
-        .frame(height: 300)
-        .chartYScale(domain: 10...30)
-        .chartYAxis {
-            AxisMarks(position: .leading) {
-                AxisGridLine()
-                AxisTick()
-                AxisValueLabel()
+            .frame(height: 250)
+            .chartYScale(domain: 10...30)
+            .chartYAxis {
+                AxisMarks(position: .leading) {
+                    AxisGridLine()
+                        .foregroundStyle(.white.opacity(0.2))
+                    AxisTick()
+                        .foregroundStyle(.white.opacity(0.5))
+                    AxisValueLabel()
+                        .foregroundStyle(.white)
+                }
             }
-        }
-        .chartXAxis {
-            AxisMarks(values: .stride(by: .day)) { value in
-                AxisGridLine()
-                AxisTick()
-                AxisValueLabel(format: .dateTime.day())
+            .chartXAxis {
+                AxisMarks(values: .stride(by: selectedTimeRange == .week ? .day : .weekOfYear)) { value in
+                    AxisGridLine()
+                        .foregroundStyle(.white.opacity(0.2))
+                    AxisTick()
+                        .foregroundStyle(.white.opacity(0.5))
+                }
             }
+            
+            // 日付ラベル
+            dateLabelsView
         }
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.white.opacity(0.05))
+        )
     }
     
     private var workoutIntensityChart: some View {
-        Chart {
-            ForEach(filteredData) { dataPoint in
-                BarMark(
-                    x: .value("日付", dataPoint.date),
-                    y: .value("筋トレ強度", dataPoint.workoutIntensity)
-                )
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [.orange, .red],
-                        startPoint: .bottom,
-                        endPoint: .top
+        VStack(spacing: 10) {
+            Chart {
+                ForEach(filteredData) { dataPoint in
+                    BarMark(
+                        x: .value("日付", dataPoint.date),
+                        y: .value("筋トレ強度", dataPoint.workoutIntensity)
                     )
-                )
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [.orange, .red],
+                            startPoint: .bottom,
+                            endPoint: .top
+                        )
+                    )
+                }
             }
-        }
-        .frame(height: 300)
-        .chartYScale(domain: 0...1)
-        .chartYAxis {
-            AxisMarks(position: .leading) {
-                AxisGridLine()
-                AxisTick()
-                AxisValueLabel()
+            .frame(height: 250)
+            .chartYScale(domain: 0...1)
+            .chartYAxis {
+                AxisMarks(position: .leading) {
+                    AxisGridLine()
+                        .foregroundStyle(.white.opacity(0.2))
+                    AxisTick()
+                        .foregroundStyle(.white.opacity(0.5))
+                    AxisValueLabel()
+                        .foregroundStyle(.white)
+                }
             }
-        }
-        .chartXAxis {
-            AxisMarks(values: .stride(by: .day)) { value in
-                AxisGridLine()
-                AxisTick()
-                AxisValueLabel(format: .dateTime.day())
+            .chartXAxis {
+                AxisMarks(values: .stride(by: selectedTimeRange == .week ? .day : .weekOfYear)) { value in
+                    AxisGridLine()
+                        .foregroundStyle(.white.opacity(0.2))
+                    AxisTick()
+                        .foregroundStyle(.white.opacity(0.5))
+                }
             }
+            
+            // 日付ラベル
+            dateLabelsView
         }
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.white.opacity(0.05))
+        )
     }
     
     // MARK: - Detailed Analysis Section
@@ -401,6 +475,9 @@ struct FitnessAnalysisView: View {
     }
     
     private var filteredData: [FitnessDataPoint] {
+        let calendar = Calendar.current
+        let today = Date()
+        
         let days: Int
         switch selectedTimeRange {
         case .week:
@@ -411,7 +488,12 @@ struct FitnessAnalysisView: View {
             days = 90
         }
         
-        return Array(analysisCalculator.fitnessData.suffix(days))
+        // 指定された日数分のデータを取得（今日を基準）
+        let startDate = calendar.date(byAdding: .day, value: -(days - 1), to: today) ?? today
+        
+        return analysisCalculator.fitnessData.filter { dataPoint in
+            dataPoint.date >= startDate && dataPoint.date <= today
+        }
     }
     
     private var averageMuscleGainEfficiency: Double {
